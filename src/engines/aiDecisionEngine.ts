@@ -1,14 +1,13 @@
 import { AIDecisionOutput, AIFeatureInput } from '../types/ai';
 
-export const AI_CONFIDENCE_DISCLOSURE = 
+export const AI_CONFIDENCE_DISCLOSURE =
   'Statistical Advisory: The AI confidence score (0.00-1.00) is an uncalibrated heuristic rating representing pattern affinity. It does NOT represent a probability of profit or expected return. Financial markets are non-stationary and past predictive correlations decay.';
 
 export function generateAIDecision(features: AIFeatureInput): AIDecisionOutput {
-  const { currentPrice, indicators, newsSentiment, currentMarketConditions, symbol } = features;
+  const { currentPrice, indicators, newsSentiment, currentMarketConditions } = features;
   const risk_flags: string[] = [];
   const required_checks: string[] = [];
 
-  // Data sanity check
   if (currentMarketConditions.dataStalenessMs > 3000) {
     risk_flags.push('DATA_STALENESS_EXCEEDS_MAX_TOLERANCE');
     required_checks.push('Verify feed latency with broker gateway');
@@ -19,25 +18,21 @@ export function generateAIDecision(features: AIFeatureInput): AIDecisionOutput {
     required_checks.push('Confirm order book depth before sizing');
   }
 
-  // Volatility check
   const atrRatio = indicators.atr14 / currentPrice;
   if (atrRatio > 0.03) {
     risk_flags.push('ELEVATED_VOLATILITY_EXPANSION');
     required_checks.push('Tighten maximum position sizing by 50%');
   }
 
-  // News check
   if (newsSentiment && Math.abs(newsSentiment.score) > 0.5) {
     risk_flags.push(`HIGH_IMPACT_NEWS_EVENT_${newsSentiment.score > 0 ? 'BULLISH' : 'BEARISH'}`);
   }
 
-  // Mandatory checks that MUST always be enforced by Risk Engine
   required_checks.push('Enforce deterministic Stop-Loss');
   required_checks.push('Verify portfolio aggregate exposure < 70%');
   required_checks.push('Verify duplicate order filter window');
   required_checks.push('Check daily loss circuit breaker');
 
-  // Decision logic (Strictly probabilistic/heuristic, NO guaranteed claims)
   let signal: AIDecisionOutput['signal'] = 'NO_TRADE';
   let confidence = 0.50;
   let reasoning = 'Market conditions neutral. No clear statistical edge identified.';
@@ -58,16 +53,16 @@ export function generateAIDecision(features: AIFeatureInput): AIDecisionOutput {
     signal = 'BUY';
     confidence = 0.72;
     strategy = 'TF_EMA_CROSS';
-    reasoning = `Strong alignment of moving average cascade (20 > 50 > 200 EMA). Trend persistence probability positive in ${indicators.marketRegime}.`;
+    reasoning = `Strong alignment of moving average cascade (20 > 50 > 200 EMA) in ${indicators.marketRegime}.`;
   } else if (indicators.rsi14 > 72 && currentPrice > indicators.ema20 * 1.05) {
     signal = 'SELL';
     confidence = 0.65;
     strategy = 'MR_RSI_BOLLINGER';
-    reasoning = `Overextended bullish price action (RSI ${indicators.rsi14}). Elevated probability of mean reversion or consolidation pullback.`;
+    reasoning = `Overextended bullish price action (RSI ${indicators.rsi14}). Elevated mean-reversion risk; deterministic risk gates must still approve any order.`;
   } else {
     signal = 'HOLD';
     confidence = 0.55;
-    reasoning = `Price action in consolidation (Regime: ${indicators.marketRegime}). Current risk/reward does not exceed minimum institutional hurdle. Recommend waiting.`;
+    reasoning = `Price action in consolidation (Regime: ${indicators.marketRegime}). Current risk/reward does not exceed the configured hurdle.`;
     strategy = 'SYSTEM_WAIT';
   }
 
@@ -80,7 +75,8 @@ export function generateAIDecision(features: AIFeatureInput): AIDecisionOutput {
     risk_flags,
     required_checks,
     generatedAt: Date.now(),
-    modelIdentifier: 'GEMINI-PRO-QUANT-DECISION-V2.4',
+    // This module is deterministic heuristic logic; it does not make a Gemini API call.
+    modelIdentifier: 'HEURISTIC-QUANT-DECISION-V2.5',
     featuresUsed: {
       price: currentPrice,
       regime: indicators.marketRegime,
