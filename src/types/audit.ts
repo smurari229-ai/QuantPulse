@@ -23,7 +23,7 @@ export interface AuditRecord {
   strategyId?: string;
   details: Record<string, unknown>;
   previousHash: string;
-  recordHash: string; // SHA-256 equivalent tamper-evident hash
+  recordHash: string; // Deterministic in-memory tamper-evident hash; not SHA-256.
   sourceModule: 'MARKET_DATA' | 'AI_ENGINE' | 'STRATEGY' | 'RISK_ENGINE' | 'PAPER_BROKER' | 'KILL_SWITCH' | 'SECURITY';
   severity: 'INFO' | 'NOTICE' | 'WARNING' | 'CRITICAL';
 }
