@@ -8,6 +8,41 @@ export function generateAIDecision(features: AIFeatureInput): AIDecisionOutput {
   const risk_flags: string[] = [];
   const required_checks: string[] = [];
 
+  const numericInputs = [
+    currentPrice,
+    indicators.atr14,
+    indicators.rsi14,
+    indicators.ema20,
+    indicators.ema50,
+    indicators.ema200,
+    indicators.relativeVolume,
+    currentMarketConditions.dataStalenessMs,
+    currentMarketConditions.spreadBps,
+  ];
+  const hasInvalidInput = numericInputs.some((value) => !Number.isFinite(value));
+
+  if (hasInvalidInput || currentPrice <= 0 || indicators.atr14 < 0 || indicators.relativeVolume < 0) {
+    return {
+      signal: 'NO_TRADE',
+      confidence: 0,
+      confidenceCalibrationNote: AI_CONFIDENCE_DISCLOSURE,
+      reasoning: 'Invalid or non-finite market/indicator input detected. No trading decision is permitted until inputs are validated.',
+      strategy: 'INPUT_VALIDATION_HALT',
+      risk_flags: ['INVALID_AI_INPUT_DATA'],
+      required_checks: ['Revalidate market snapshot and indicators before any order is considered'],
+      generatedAt: Date.now(),
+      modelIdentifier: 'HEURISTIC-QUANT-DECISION-V2.5',
+      featuresUsed: {
+        price: Number.isFinite(currentPrice) ? currentPrice : 0,
+        regime: indicators.marketRegime,
+        rsi: Number.isFinite(indicators.rsi14) ? indicators.rsi14 : 0,
+        trend: 'UNKNOWN',
+        volatilityAtr: Number.isFinite(indicators.atr14) ? indicators.atr14 : 0,
+        volumeCondition: 'UNKNOWN',
+      },
+    };
+  }
+
   if (currentMarketConditions.dataStalenessMs > 3000) {
     risk_flags.push('DATA_STALENESS_EXCEEDS_MAX_TOLERANCE');
     required_checks.push('Verify feed latency with broker gateway');
@@ -24,7 +59,7 @@ export function generateAIDecision(features: AIFeatureInput): AIDecisionOutput {
     required_checks.push('Tighten maximum position sizing by 50%');
   }
 
-  if (newsSentiment && Math.abs(newsSentiment.score) > 0.5) {
+  if (newsSentiment && Number.isFinite(newsSentiment.score) && Math.abs(newsSentiment.score) > 0.5) {
     risk_flags.push(`HIGH_IMPACT_NEWS_EVENT_${newsSentiment.score > 0 ? 'BULLISH' : 'BEARISH'}`);
   }
 
@@ -75,7 +110,6 @@ export function generateAIDecision(features: AIFeatureInput): AIDecisionOutput {
     risk_flags,
     required_checks,
     generatedAt: Date.now(),
-    // This module is deterministic heuristic logic; it does not make a Gemini API call.
     modelIdentifier: 'HEURISTIC-QUANT-DECISION-V2.5',
     featuresUsed: {
       price: currentPrice,
