@@ -24,6 +24,15 @@ export function runFullBacktest(
   if (params.positionSizingPct <= 0 || params.positionSizingPct > 100) {
     throw new Error('positionSizingPct must be greater than 0 and at most 100.');
   }
+  if (!Number.isFinite(params.slippageBps) || params.slippageBps < 0) {
+    throw new Error('slippageBps must be a finite non-negative number.');
+  }
+  if (!Number.isFinite(params.commissionRatePct) || params.commissionRatePct < 0) {
+    throw new Error('commissionRatePct must be a finite non-negative number.');
+  }
+  if (!Number.isFinite(params.taxRatePct) || params.taxRatePct < 0) {
+    throw new Error('taxRatePct must be a finite non-negative number.');
+  }
 
   const splitIndex = Math.min(
     Math.max(Math.floor(bars.length * (1 - params.outOfSampleSplitRatio)), 1),
@@ -140,6 +149,25 @@ export function runFullBacktest(
   };
 }
 
+function calculateSlippageBps(
+  params: BacktestParameters,
+  executionPrice: number,
+  atr?: number
+): number {
+  if (params.slippageModel === 'ZERO') return 0;
+
+  const baseBps = Math.max(0, params.slippageBps);
+  if (params.slippageModel === 'FIXED_BPS') return baseBps;
+
+  // Square-root impact model: the configured slippageBps is the reference
+  // impact at 1% ATR/price volatility. Higher volatility increases impact
+  // sub-linearly; lower volatility decreases it. No future bar data is used.
+  const volatilityRatio = Number.isFinite(atr) && atr !== undefined && executionPrice > 0
+    ? Math.max(0, atr / executionPrice)
+    : 0;
+  return baseBps * Math.sqrt(volatilityRatio / 0.01);
+}
+
 function simulateBars(
   bars: OHLCV[],
   params: BacktestParameters,
@@ -188,8 +216,9 @@ function simulateBars(
       }
 
       if (exitReason && exitPrice > 0) {
-        const exitSlippagePerUnit = (exitPrice * params.slippageBps) / 10000;
-        const netExitPrice = exitPrice - exitSlippagePerUnit;
+        const exitSlippageBps = calculateSlippageBps(params, exitPrice, atr[i]);
+        const exitSlippagePerUnit = (exitPrice * exitSlippageBps) / 10000;
+        const netExitPrice = Math.max(Number.EPSILON, exitPrice - exitSlippagePerUnit);
         const grossPnL = (netExitPrice - inPosition.entryPrice) * inPosition.quantity;
         const turnover = (inPosition.entryPrice + netExitPrice) * inPosition.quantity;
         const feesPaid = turnover * (params.commissionRatePct / 100 + params.taxRatePct / 100);
@@ -226,7 +255,8 @@ function simulateBars(
     if (!isBull) continue;
 
     const rawEntry = nextBar.open;
-    const entrySlippagePerUnit = (rawEntry * params.slippageBps) / 10000;
+    const entrySlippageBps = calculateSlippageBps(params, rawEntry, atr[i]);
+    const entrySlippagePerUnit = (rawEntry * entrySlippageBps) / 10000;
     const executedEntry = rawEntry + entrySlippagePerUnit;
     const currentAtr = atr[i] || rawEntry * 0.015;
     const stopLoss = executedEntry - 1.8 * currentAtr;
