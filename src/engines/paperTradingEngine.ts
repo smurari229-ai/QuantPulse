@@ -12,201 +12,95 @@ export interface PaperSimulationResult {
 }
 
 export const INITIAL_PORTFOLIO_STATE: PortfolioState = {
-  cash: 100000,
-  initialCapital: 100000,
-  equity: 100000,
-  totalUnrealizedPnL: 0,
-  totalRealizedPnL: 0,
-  dailyPnL: 0,
-  dailyPnLPct: 0,
-  peakEquity: 100000,
-  currentDrawdownPct: 0,
-  marginUsed: 0,
-  availableMargin: 100000,
-  positionsCount: 0,
-  portfolioExposurePct: 0,
-  positions: [],
-  lastUpdated: Date.now(),
+  cash: 100000, initialCapital: 100000, equity: 100000, totalUnrealizedPnL: 0, totalRealizedPnL: 0,
+  dailyPnL: 0, dailyPnLPct: 0, peakEquity: 100000, currentDrawdownPct: 0, marginUsed: 0,
+  availableMargin: 100000, positionsCount: 0, portfolioExposurePct: 0, positions: [], lastUpdated: Date.now(),
 };
 
-export function executePaperOrder(
-  order: OrderRequest,
-  currentPortfolio: PortfolioState,
-  marketSnapshot: MarketDataSnapshot,
-  options?: { simulatedLatencyMs?: number; customSlippageBps?: number }
-): PaperSimulationResult {
-  // Defensive check: Paper trading only
-  if (order.executionMode === 'LIVE_BLOCKED') {
-    return {
-      order,
-      updatedPortfolio: currentPortfolio,
-      slippageIncurredBps: 0,
-      totalCharges: 0,
-      status: 'REJECTED',
-      rejectionReason: 'Direct Live Execution is strictly blocked by platform governance.',
-    };
-  }
+export function executePaperOrder(order: OrderRequest, currentPortfolio: PortfolioState, marketSnapshot: MarketDataSnapshot, options?: { simulatedLatencyMs?: number; customSlippageBps?: number }): PaperSimulationResult {
+  if (order.executionMode === 'LIVE_BLOCKED') return reject(order, currentPortfolio, 'Direct Live Execution is strictly blocked by platform governance.');
+  if (!Number.isFinite(order.quantity) || order.quantity <= 0) return reject(order, currentPortfolio, 'Order quantity must be a positive finite number.');
+  if (marketSnapshot.bid <= 0 || marketSnapshot.ask <= 0) return reject(order, currentPortfolio, 'Invalid market bid/ask data.');
 
-  // Calculate simulated slippage based on volume and spread
-  const baseSlippageBps = options?.customSlippageBps ?? (order.side === 'BUY' ? 4.5 : 5.0);
-  const slippageMultiplier = 1 + baseSlippageBps / 10000;
-  
+  const positionIndex = currentPortfolio.positions.findIndex(p => p.symbol === order.symbol);
+  const existing = positionIndex >= 0 ? currentPortfolio.positions[positionIndex] : undefined;
+  if (order.side === 'SELL' && !existing) return reject(order, currentPortfolio, `Cannot sell ${order.symbol}: no paper position exists.`);
+  if (order.side === 'SELL' && existing && order.quantity > existing.quantity) return reject(order, currentPortfolio, `Cannot sell ${order.quantity} units: only ${existing.quantity} units are held.`);
+
+  const slippageBps = options?.customSlippageBps ?? (order.side === 'BUY' ? 4.5 : 5);
+  const factor = 1 + slippageBps / 10000;
   const rawPrice = order.estimatedPrice || (order.side === 'BUY' ? marketSnapshot.ask : marketSnapshot.bid);
-  const fillPrice = order.side === 'BUY'
-    ? Math.round(rawPrice * slippageMultiplier * 100) / 100
-    : Math.round((rawPrice / slippageMultiplier) * 100) / 100;
+  if (!Number.isFinite(rawPrice) || rawPrice <= 0) return reject(order, currentPortfolio, 'Invalid execution price.');
+  const fillPrice = order.side === 'BUY' ? Math.round(rawPrice * factor * 100) / 100 : Math.round((rawPrice / factor) * 100) / 100;
+  const value = fillPrice * order.quantity;
+  const brokerFee = Math.max(20, Math.round(value * 0.0003 * 100) / 100);
+  const exchangeFee = Math.round(value * 0.000035 * 100) / 100;
+  const taxesApplicable = Math.round(value * 0.0001 * 100) / 100;
+  const totalCharges = Math.round((brokerFee + exchangeFee + taxesApplicable) * 100) / 100;
 
-  const orderValue = fillPrice * order.quantity;
-
-  // Fee calculation (Brokerage: 0.03%, STT/Exchange: 0.012%)
-  const brokerFee = Math.max(20, Math.round(orderValue * 0.0003 * 100) / 100);
-  const exchangeFee = Math.round(orderValue * 0.000035 * 100) / 100;
-  const taxesApplicable = Math.round(orderValue * 0.0001 * 100) / 100; // Securities Transaction Tax
-  const totalCharges = brokerFee + exchangeFee + taxesApplicable;
-
-  // Margin / Cash check
-  if (order.side === 'BUY' && currentPortfolio.cash < orderValue + totalCharges) {
-    return {
-      order,
-      updatedPortfolio: currentPortfolio,
-      slippageIncurredBps: 0,
-      totalCharges: 0,
-      status: 'REJECTED',
-      rejectionReason: `Insufficient paper cash ($${currentPortfolio.cash.toFixed(2)} available, need $${(orderValue + totalCharges).toFixed(2)})`,
-    };
-  }
+  if (order.side === 'BUY' && currentPortfolio.cash < value + totalCharges) return reject(order, currentPortfolio, `Insufficient paper cash ($${currentPortfolio.cash.toFixed(2)} available, need $${(value + totalCharges).toFixed(2)}).`);
 
   const fill: OrderFill = {
-    fillId: `FILL-PAPER-${Date.now().toString(36).toUpperCase()}`,
-    orderId: order.id,
-    symbol: order.symbol,
-    side: order.side,
-    quantity: order.quantity,
-    price: fillPrice,
-    slippageIncurredBps: baseSlippageBps,
-    brokerFee,
-    exchangeFee,
-    taxesApplicable,
-    totalCharges,
-    timestamp: Date.now(),
-    brokerOrderId: `MOCK-BRK-${Math.floor(Math.random() * 899999 + 100000)}`,
+    fillId: `FILL-PAPER-${Date.now().toString(36).toUpperCase()}`, orderId: order.id, symbol: order.symbol, side: order.side,
+    quantity: order.quantity, price: fillPrice, slippageIncurredBps: slippageBps, slippageBps, brokerFee, brokerageFee: brokerFee,
+    exchangeFee, taxesApplicable, totalCharges, timestamp: Date.now(), brokerOrderId: `MOCK-BRK-${Math.floor(Math.random() * 899999 + 100000)}`,
   };
 
-  // Update positions and portfolio
-  const existingPositionIndex = currentPortfolio.positions.findIndex((p) => p.symbol === order.symbol);
-  const newPositions = [...currentPortfolio.positions];
-  let realizedPnLDelta = 0;
+  const positions: Position[] = currentPortfolio.positions.map(p => ({ ...p }));
   let cashDelta = 0;
+  let realizedDelta = 0;
 
   if (order.side === 'BUY') {
-    cashDelta = -(orderValue + totalCharges);
-    if (existingPositionIndex >= 0) {
-      const existing = newPositions[existingPositionIndex];
-      const totalQty = existing.quantity + order.quantity;
-      const avgPrice = (existing.averageEntryPrice * existing.quantity + fillPrice * order.quantity) / totalQty;
-      newPositions[existingPositionIndex] = {
-        ...existing,
-        quantity: totalQty,
-        averageEntryPrice: Math.round(avgPrice * 100) / 100,
-        currentPrice: marketSnapshot.lastPrice,
-        marketValue: totalQty * marketSnapshot.lastPrice,
-        stopLossPrice: order.stopLossPrice,
-        takeProfitPrice: order.takeProfitPrice,
-        notionalExposurePct: 0, // recalculated below
-      };
+    cashDelta = -(value + totalCharges);
+    if (existing) {
+      const p = positions[positionIndex];
+      const totalQty = p.quantity + order.quantity;
+      p.averageEntryPrice = Math.round(((p.averageEntryPrice * p.quantity + fillPrice * order.quantity) / totalQty) * 100) / 100;
+      p.quantity = totalQty; p.currentPrice = marketSnapshot.lastPrice;
+      p.stopLossPrice = order.stopLossPrice; p.takeProfitPrice = order.takeProfitPrice;
     } else {
-      newPositions.push({
-        symbol: order.symbol,
-        quantity: order.quantity,
-        averageEntryPrice: fillPrice,
-        currentPrice: marketSnapshot.lastPrice,
-        marketValue: orderValue,
-        unrealizedPnL: 0,
-        unrealizedPnLPct: 0,
-        realizedPnL: 0,
-        stopLossPrice: order.stopLossPrice,
-        takeProfitPrice: order.takeProfitPrice,
-        notionalExposurePct: 0,
-        highestPriceSinceEntry: fillPrice,
-        openedAt: Date.now(),
-      });
+      positions.push({ symbol: order.symbol, quantity: order.quantity, averageEntryPrice: fillPrice, currentPrice: marketSnapshot.lastPrice,
+        marketValue: 0, unrealizedPnL: 0, unrealizedPnLPct: 0, realizedPnL: 0, stopLossPrice: order.stopLossPrice,
+        takeProfitPrice: order.takeProfitPrice, notionalExposurePct: 0, highestPriceSinceEntry: fillPrice, openedAt: Date.now() });
     }
-  } else {
-    // SELL order
-    cashDelta = orderValue - totalCharges;
-    if (existingPositionIndex >= 0) {
-      const existing = newPositions[existingPositionIndex];
-      const closedQty = Math.min(existing.quantity, order.quantity);
-      realizedPnLDelta = (fillPrice - existing.averageEntryPrice) * closedQty - totalCharges;
-
-      if (existing.quantity <= order.quantity) {
-        // Fully closed
-        newPositions.splice(existingPositionIndex, 1);
-      } else {
-        // Partially closed
-        const remainingQty = existing.quantity - order.quantity;
-        newPositions[existingPositionIndex] = {
-          ...existing,
-          quantity: remainingQty,
-          realizedPnL: existing.realizedPnL + realizedPnLDelta,
-          marketValue: remainingQty * marketSnapshot.lastPrice,
-        };
-      }
-    }
+  } else if (existing) {
+    cashDelta = value - totalCharges;
+    realizedDelta = (fillPrice - existing.averageEntryPrice) * order.quantity - totalCharges;
+    if (order.quantity === existing.quantity) positions.splice(positionIndex, 1);
+    else { positions[positionIndex].quantity -= order.quantity; positions[positionIndex].realizedPnL += realizedDelta; }
   }
 
-  const newCash = currentPortfolio.cash + cashDelta;
-  let totalMarketValue = 0;
-  let totalUnrealized = 0;
-
-  for (let i = 0; i < newPositions.length; i++) {
-    const p = newPositions[i];
-    const curVal = p.quantity * marketSnapshot.lastPrice;
-    const unPnL = curVal - p.averageEntryPrice * p.quantity;
-    p.marketValue = Math.round(curVal * 100) / 100;
-    p.unrealizedPnL = Math.round(unPnL * 100) / 100;
-    p.unrealizedPnLPct = Math.round((unPnL / (p.averageEntryPrice * p.quantity)) * 10000) / 100;
-    totalMarketValue += curVal;
-    totalUnrealized += unPnL;
+  const cash = currentPortfolio.cash + cashDelta;
+  let marketValue = 0;
+  let unrealized = 0;
+  for (const p of positions) {
+    const currentValue = p.quantity * marketSnapshot.lastPrice;
+    const basis = p.averageEntryPrice * p.quantity;
+    const pnl = currentValue - basis;
+    p.currentPrice = marketSnapshot.lastPrice; p.marketValue = Math.round(currentValue * 100) / 100;
+    p.unrealizedPnL = Math.round(pnl * 100) / 100; p.unrealizedPnLPct = basis > 0 ? Math.round((pnl / basis) * 10000) / 100 : 0;
+    marketValue += currentValue; unrealized += pnl;
   }
 
-  const newEquity = Math.round((newCash + totalMarketValue) * 100) / 100;
-  const newPeak = Math.max(currentPortfolio.peakEquity, newEquity);
-  const drawdownPct = newPeak > 0 ? Math.round(((newPeak - newEquity) / newPeak) * 10000) / 100 : 0;
-  const totalRealized = currentPortfolio.totalRealizedPnL + realizedPnLDelta;
-  const dailyPnL = newEquity - currentPortfolio.initialCapital;
-  const dailyPnLPct = Math.round((dailyPnL / currentPortfolio.initialCapital) * 10000) / 100;
-  const portfolioExposurePct = newEquity > 0 ? Math.round((totalMarketValue / newEquity) * 1000) / 10 : 0;
-
-  // Recalculate each position's exposure %
-  for (const p of newPositions) {
-    p.notionalExposurePct = newEquity > 0 ? Math.round((p.marketValue / newEquity) * 1000) / 10 : 0;
-  }
+  const equity = Math.round((cash + marketValue) * 100) / 100;
+  const peak = Math.max(currentPortfolio.peakEquity, equity);
+  const drawdown = peak > 0 ? Math.round(((peak - equity) / peak) * 10000) / 100 : 0;
+  const dailyPnL = equity - currentPortfolio.initialCapital;
+  const dailyPnLPct = currentPortfolio.initialCapital > 0 ? Math.round((dailyPnL / currentPortfolio.initialCapital) * 10000) / 100 : 0;
+  const exposure = equity > 0 ? Math.round((marketValue / equity) * 1000) / 10 : 0;
+  for (const p of positions) p.notionalExposurePct = equity > 0 ? Math.round((p.marketValue / equity) * 1000) / 10 : 0;
 
   const updatedPortfolio: PortfolioState = {
-    cash: Math.round(newCash * 100) / 100,
-    initialCapital: currentPortfolio.initialCapital,
-    equity: newEquity,
-    totalUnrealizedPnL: Math.round(totalUnrealized * 100) / 100,
-    totalRealizedPnL: Math.round(totalRealized * 100) / 100,
-    dailyPnL: Math.round(dailyPnL * 100) / 100,
-    dailyPnLPct,
-    peakEquity: newPeak,
-    currentDrawdownPct: drawdownPct,
-    marginUsed: Math.round(totalMarketValue * 0.25 * 100) / 100,
-    availableMargin: Math.round((newCash + totalMarketValue * 0.75) * 100) / 100,
-    positionsCount: newPositions.length,
-    portfolioExposurePct,
-    positions: newPositions,
-    lastUpdated: Date.now(),
+    cash: Math.round(cash * 100) / 100, initialCapital: currentPortfolio.initialCapital, equity,
+    totalUnrealizedPnL: Math.round(unrealized * 100) / 100,
+    totalRealizedPnL: Math.round((currentPortfolio.totalRealizedPnL + realizedDelta) * 100) / 100,
+    dailyPnL: Math.round(dailyPnL * 100) / 100, dailyPnLPct, peakEquity: peak, currentDrawdownPct: drawdown,
+    marginUsed: Math.round(marketValue * 0.25 * 100) / 100, availableMargin: Math.round((cash + marketValue * 0.75) * 100) / 100,
+    positionsCount: positions.length, portfolioExposurePct: exposure, positions, lastUpdated: Date.now(),
   };
+  return { order, fill, updatedPortfolio, slippageIncurredBps: slippageBps, totalCharges, status: 'FILLED' };
+}
 
-  return {
-    order,
-    fill,
-    updatedPortfolio,
-    slippageIncurredBps: baseSlippageBps,
-    totalCharges,
-    status: 'FILLED',
-  };
+function reject(order: OrderRequest, portfolio: PortfolioState, rejectionReason: string): PaperSimulationResult {
+  return { order, updatedPortfolio: portfolio, slippageIncurredBps: 0, totalCharges: 0, status: 'REJECTED', rejectionReason };
 }
