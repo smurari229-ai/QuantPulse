@@ -88,7 +88,6 @@ export function generateRealisticHistoricalOHLCV(
 
   for (let i = 0; i < daysCount; i++) {
     const timestamp = startTime + i * dayMs;
-    // Introduce periodic regime shifts every 25 bars
     if (i % 25 === 0) {
       currentDrift = (Math.sin(i / 10) * 0.001);
     }
@@ -97,7 +96,7 @@ export function generateRealisticHistoricalOHLCV(
     const dailyReturn = currentDrift + shock;
     const open = Math.round(price * 100) / 100;
     const close = Math.round((open * (1 + dailyReturn)) * 100) / 100;
-    
+
     const intradayRange = Math.abs(open * volatility * 1.8);
     const high = Math.round((Math.max(open, close) + intradayRange * 0.6) * 100) / 100;
     const low = Math.round((Math.min(open, close) - intradayRange * 0.4) * 100) / 100;
@@ -120,7 +119,7 @@ export function validateMarketDataSeries(bars: OHLCV[]): MarketValidationResult 
   let priceGapExceedsThreshold = false;
   let staleTimestamp = false;
 
-  if (!bars || bars.length === 0) {
+  if (!Array.isArray(bars) || bars.length === 0) {
     return {
       isValid: false,
       errors: ['Market data series is empty or undefined'],
@@ -137,27 +136,37 @@ export function validateMarketDataSeries(bars: OHLCV[]): MarketValidationResult 
 
   for (let i = 0; i < bars.length; i++) {
     const bar = bars[i];
+    const valuesAreFinite = [bar.timestamp, bar.open, bar.high, bar.low, bar.close, bar.volume]
+      .every(Number.isFinite);
 
-    // Check 1: Non-positive price
-    if (bar.open <= 0 || bar.high <= 0 || bar.low <= 0 || bar.close <= 0) {
-      negativePrice = true;
-      errors.push(`Bar #${i} (${new Date(bar.timestamp).toISOString()}): Non-positive price detected (Open=${bar.open}, Low=${bar.low}).`);
+    if (!valuesAreFinite) {
+      errors.push(`Bar #${i}: Non-finite timestamp, price, or volume value detected.`);
+      staleTimestamp ||= !Number.isFinite(bar.timestamp);
+      negativePrice ||= [bar.open, bar.high, bar.low, bar.close].some((value) => !Number.isFinite(value) || value <= 0);
+      continue;
     }
 
-    // Check 2: High < Low or Open/Close outside High/Low
+    if (!Number.isInteger(bar.timestamp) || bar.timestamp <= 0) {
+      staleTimestamp = true;
+      errors.push(`Bar #${i}: Invalid timestamp (${bar.timestamp}).`);
+    }
+
+    if (bar.open <= 0 || bar.high <= 0 || bar.low <= 0 || bar.close <= 0) {
+      negativePrice = true;
+      errors.push(`Bar #${i}: Non-positive price detected (Open=${bar.open}, Low=${bar.low}).`);
+    }
+
     if (bar.high < bar.low || bar.open > bar.high || bar.close > bar.high || bar.open < bar.low || bar.close < bar.low) {
       highLowInversion = true;
       errors.push(`Bar #${i}: High/Low/Open/Close geometrical inversion detected (High=${bar.high}, Low=${bar.low}, Open=${bar.open}, Close=${bar.close}).`);
     }
 
-    // Check 3: Zero volume on equity with price variation
     if (bar.volume <= 0 && bar.high !== bar.low) {
       zeroVolumeSpike = true;
       warnings.push(`Bar #${i}: Zero volume with nonzero price movement.`);
     }
 
-    // Check 4: Unrealistic price jump (> 20% single day anomaly check)
-    if (i > 0) {
+    if (i > 0 && Number.isFinite(bars[i - 1].close) && bars[i - 1].close > 0) {
       const prevBar = bars[i - 1];
       const jumpPct = Math.abs(bar.open - prevBar.close) / prevBar.close;
       if (jumpPct > 0.20) {
@@ -165,7 +174,6 @@ export function validateMarketDataSeries(bars: OHLCV[]): MarketValidationResult 
         warnings.push(`Bar #${i}: Extreme price jump of ${(jumpPct * 100).toFixed(1)}% between bars.`);
       }
 
-      // Check 5: Non-monotonic timestamp
       if (bar.timestamp <= prevBar.timestamp) {
         staleTimestamp = true;
         errors.push(`Bar #${i}: Non-chronological or duplicate timestamp (${bar.timestamp} <= ${prevBar.timestamp}).`);
@@ -193,7 +201,7 @@ export function getLiveSnapshot(
   lastClose: number,
   options?: { isStale?: boolean; latencyMs?: number; injectAnomaly?: boolean }
 ): MarketDataSnapshot {
-  const spreadBps = 4; // 4 bps = 0.04%
+  const spreadBps = 4;
   const halfSpread = (lastClose * spreadBps) / 20000;
   const bid = Math.round((lastClose - halfSpread) * 100) / 100;
   const ask = Math.round((lastClose + halfSpread) * 100) / 100;
