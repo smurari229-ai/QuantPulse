@@ -47,7 +47,7 @@ const riskCheckNames = staleVerdict.checks.map(c => c.checkName);
 assert(new Set(riskCheckNames).size === riskCheckNames.length, 'risk gate check names are unique');
 assert(riskCheckNames.includes('MAX_POSITION_NOTIONAL'), 'notional gate has stable unique identity');
 assert(riskCheckNames.includes('MAX_POSITION_PCT_OF_PORTFOLIO'), 'portfolio-percent gate has stable unique identity');
-assert(/^RISK-VERDICT-.*-(APPR|REJT)-\d{4}$/.test(staleVerdict.auditableRiskToken), 'risk verdict token has expected non-predictable suffix format');
+assert(/^RISK-VERDICT-.*-(APPR|REJT)-\d{4}$/.test(staleVerdict.auditableRiskToken), 'risk verdict token has expected suffix format');
 
 const malformedOrder = { ...baseOrder, quantity: -1 };
 const malformedVerdict = evaluateRiskGates(malformedOrder, INITIAL_PORTFOLIO_STATE, snapshot);
@@ -93,7 +93,7 @@ const goodReset = resetKillSwitchWithVerification(killState, killState.resetConf
 assert(goodReset.success && !goodReset.updatedState.isEmergencyStopTripped, 'correct reset code re-arms sandbox');
 
 const auditLedger = new AuditLogChain();
-const auditRecord = auditLedger.appendRecord('ORDER_REJECTED', 'RISK_ENGINE', { apiKey: 'SECRET', symbol: 'NIFTY50' }, 'WARN');
+const auditRecord = auditLedger.appendRecord('RISK_GATE_REJECTED', 'RISK_ENGINE', { apiKey: 'SECRET', symbol: 'NIFTY50' }, 'WARNING');
 assert(auditLedger.verifyChainIntegrity(), 'audit chain verifies immediately after append');
 assert(!('apiKey' in auditRecord.details), 'audit records do not retain apiKey secrets');
 const tamperRecord = auditLedger.getAllRecords(2)[0];
