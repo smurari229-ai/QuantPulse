@@ -52,8 +52,9 @@ export function runFullBacktest(
   const inSampleMetrics = calculateQuantitativeMetrics(inSampleTrades, params.initialCapital, inSampleBars);
   const outOfSampleMetrics = calculateQuantitativeMetrics(outOfSampleTrades, params.initialCapital, outOfSampleBars);
 
-  // Rolling walk-forward validation. Each test window only uses history that
-  // occurs before that test window, preventing future-data leakage.
+  // Rolling walk-forward validation. Each test window receives only the history
+  // immediately before that window for indicator warm-up. Metrics/trades are
+  // still classified strictly to the test window, preventing future leakage.
   const walkForwardResults: WalkForwardPeriodResult[] = [];
   const requestedFolds = Math.max(2, Math.min(Math.floor(params.walkForwardFolds || 3), 10));
   if (params.enableWalkForward && bars.length >= 60) {
@@ -70,8 +71,12 @@ export function runFullBacktest(
       if (trainSlice.length < 25 || testSlice.length < 10) continue;
 
       const foldParams = { ...params, enableWalkForward: false };
+      const warmupBars = trainSlice.slice(Math.max(0, trainSlice.length - 50));
+      const simulationBars = [...warmupBars, ...testSlice];
+      const testStartTimestamp = testSlice[0].timestamp;
+      const foldTrades = simulateBars(simulationBars, foldParams, testStartTimestamp);
       const trainSim = simulateBars(trainSlice, foldParams, Number.POSITIVE_INFINITY);
-      const testSim = simulateBars(testSlice, foldParams, Number.NEGATIVE_INFINITY);
+      const testSim = foldTrades.filter((trade) => trade.entryTimestamp >= testStartTimestamp);
       const trainMet = calculateQuantitativeMetrics(trainSim, params.initialCapital, trainSlice);
       const testMet = calculateQuantitativeMetrics(testSim, params.initialCapital, testSlice);
       const degradationRatio = trainMet.sharpeRatio !== 0
@@ -278,6 +283,46 @@ function simulateBars(
     };
   }
 
+  // A backtest must account for an open position at the end of its time horizon.
+  // Liquidate on the final bar close using the same exit-cost model. This avoids
+  // silently dropping unrealized P&L from final equity and closed-trade metrics.
+  if (inPosition) {
+    const finalBarIndex = bars.length - 1;
+    const finalBar = bars[finalBarIndex];
+    const exitPrice = finalBar.close;
+    if (Number.isFinite(exitPrice) && exitPrice > 0) {
+      const exitSlippageBps = calculateSlippageBps(params, exitPrice, atr[finalBarIndex]);
+      const exitSlippagePerUnit = (exitPrice * exitSlippageBps) / 10000;
+      const netExitPrice = Math.max(Number.EPSILON, exitPrice - exitSlippagePerUnit);
+      const grossPnL = (netExitPrice - inPosition.entryPrice) * inPosition.quantity;
+      const turnover = (inPosition.entryPrice + netExitPrice) * inPosition.quantity;
+      const feesPaid = turnover * (params.commissionRatePct / 100 + params.taxRatePct / 100);
+      const exitSlippagePaid = exitSlippagePerUnit * inPosition.quantity;
+      const totalSlippagePaid = inPosition.entrySlippagePaid + exitSlippagePaid;
+      const netPnL = grossPnL - feesPaid;
+      const isOutOfSample = bars[inPosition.entryBarIndex + 1].timestamp >= outOfSampleStartTimestamp;
+
+      trades.push({
+        tradeId: `TR-${trades.length + 1}-${isOutOfSample ? 'OOS' : 'IS'}`,
+        symbol: params.symbol,
+        entryTimestamp: bars[inPosition.entryBarIndex + 1].timestamp,
+        exitTimestamp: finalBar.timestamp,
+        entryPrice: inPosition.entryPrice,
+        exitPrice: netExitPrice,
+        quantity: inPosition.quantity,
+        side: inPosition.side,
+        grossPnL: Math.round(grossPnL * 100) / 100,
+        netPnL: Math.round(netPnL * 100) / 100,
+        returnPct: Math.round(((netExitPrice - inPosition.entryPrice) / inPosition.entryPrice) * 10000) / 100,
+        slippagePaid: Math.round(totalSlippagePaid * 100) / 100,
+        feesPaid: Math.round(feesPaid * 100) / 100,
+        exitReason: 'TIME_HORIZON_EXPIRED',
+        durationBars: finalBarIndex - inPosition.entryBarIndex,
+        isOutOfSample,
+      });
+    }
+  }
+
   return trades;
 }
 
@@ -327,11 +372,40 @@ function calculateQuantitativeMetrics(
   let peak = initialCapital;
   let currentCap = initialCapital;
   let maxDrawdownPct = 0;
+  let maxDrawdownDurationMs = 0;
+  let peakTimestamp = bars[0]?.timestamp ?? 0;
+  let drawdownStartTimestamp: number | null = null;
+  const exitPnlByTimestamp = new Map<number, number>();
   for (const trade of trades) {
-    currentCap += trade.netPnL;
-    if (currentCap > peak) peak = currentCap;
-    const drawdownPct = peak > 0 ? ((peak - currentCap) / peak) * 100 : 0;
-    maxDrawdownPct = Math.max(maxDrawdownPct, drawdownPct);
+    exitPnlByTimestamp.set(
+      trade.exitTimestamp,
+      (exitPnlByTimestamp.get(trade.exitTimestamp) || 0) + trade.netPnL
+    );
+  }
+
+  for (const bar of bars) {
+    currentCap += exitPnlByTimestamp.get(bar.timestamp) || 0;
+    if (currentCap > peak) {
+      peak = currentCap;
+      peakTimestamp = bar.timestamp;
+      if (drawdownStartTimestamp !== null) {
+        maxDrawdownDurationMs = Math.max(
+          maxDrawdownDurationMs,
+          bar.timestamp - drawdownStartTimestamp
+        );
+        drawdownStartTimestamp = null;
+      }
+    } else if (currentCap < peak) {
+      if (drawdownStartTimestamp === null) drawdownStartTimestamp = peakTimestamp;
+      const drawdownPct = peak > 0 ? ((peak - currentCap) / peak) * 100 : 0;
+      maxDrawdownPct = Math.max(maxDrawdownPct, drawdownPct);
+      if (drawdownStartTimestamp !== null) {
+        maxDrawdownDurationMs = Math.max(
+          maxDrawdownDurationMs,
+          bar.timestamp - drawdownStartTimestamp
+        );
+      }
+    }
   }
 
   const years = bars.length > 1
@@ -365,7 +439,7 @@ function calculateQuantitativeMetrics(
     sortinoRatio,
     calmarRatio,
     maxDrawdownPct: Math.round(maxDrawdownPct * 100) / 100,
-    maxDrawdownDurationDays: Math.round(maxDrawdownPct * 1.5),
+    maxDrawdownDurationDays: Math.round((maxDrawdownDurationMs / (24 * 3600 * 1000)) * 100) / 100,
     averageWin: avgWin,
     averageLoss: avgLoss,
     winLossRatio,
