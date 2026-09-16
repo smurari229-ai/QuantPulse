@@ -39,6 +39,16 @@ export const DEFAULT_RECENT_CONTEXT: RecentOrderContext = {
   isEmergencyKillSwitchActive: false,
 };
 
+function secureRandomDigits(min: number, max: number): number {
+  const range = max - min + 1;
+  if (!Number.isInteger(min) || !Number.isInteger(max) || range <= 0) {
+    throw new Error('Invalid secure random range.');
+  }
+  const values = new Uint32Array(1);
+  globalThis.crypto.getRandomValues(values);
+  return min + (values[0] % range);
+}
+
 export function evaluateRiskGates(
   order: OrderRequest,
   portfolio: PortfolioState,
@@ -50,13 +60,14 @@ export function evaluateRiskGates(
   const checks: IndividualRiskCheckResult[] = [];
   const rejectionReasons: string[] = [];
 
-  const referencePrice = order.estimatedPrice || marketSnapshot.lastPrice;
+  // Use nullish coalescing so an explicit zero/invalid estimated price is not
+  // silently replaced by the market price and hidden from the sanity gate.
+  const referencePrice = order.estimatedPrice ?? marketSnapshot.lastPrice;
   const notional = order.quantity * referencePrice;
   const positionPct = portfolio.equity > 0 ? (notional / portfolio.equity) * 100 : 100;
   const currentInvested = portfolio.positions.reduce((sum, p) => sum + p.marketValue, 0);
   const projectedExposurePct = portfolio.equity > 0 ? ((currentInvested + notional) / portfolio.equity) * 100 : 100;
 
-  // Gate 0: Order / market sanity. Reject malformed values before sizing calculations.
   const validQuantity = Number.isFinite(order.quantity) && order.quantity > 0;
   const validReferencePrice = Number.isFinite(referencePrice) && referencePrice > 0;
   const validMarketPrices = Number.isFinite(marketSnapshot.bid) && Number.isFinite(marketSnapshot.ask)
@@ -74,7 +85,6 @@ export function evaluateRiskGates(
   });
   if (!passedSanity) rejectionReasons.push('Malformed order or market pricing input.');
 
-  // Gate 1: Emergency Kill Switch
   const passedKillSwitch = !context.isEmergencyKillSwitchActive;
   checks.push({
     checkName: 'MARKET_ABNORMALITY_CIRCUIT_BREAKER',
@@ -86,7 +96,6 @@ export function evaluateRiskGates(
   });
   if (!passedKillSwitch) rejectionReasons.push('Emergency Kill Switch is currently engaged.');
 
-  // Gate 2: Max Position Size Notional
   const passedMaxNotional = notional <= config.maxPositionSizeNotional;
   checks.push({
     checkName: 'MAX_POSITION_NOTIONAL',
@@ -100,7 +109,6 @@ export function evaluateRiskGates(
   });
   if (!passedMaxNotional) rejectionReasons.push(`Position size exceeds $${config.maxPositionSizeNotional.toLocaleString()}`);
 
-  // Gate 3: Max Position % of Portfolio
   const passedMaxPositionPct = positionPct <= config.maxPositionPctOfPortfolio;
   checks.push({
     checkName: 'MAX_POSITION_PCT_OF_PORTFOLIO',
@@ -114,7 +122,6 @@ export function evaluateRiskGates(
   });
   if (!passedMaxPositionPct) rejectionReasons.push(`Position concentration exceeds ${config.maxPositionPctOfPortfolio}%`);
 
-  // Gate 4: Max Portfolio Exposure
   const passedExposure = projectedExposurePct <= config.maxPortfolioExposurePct;
   checks.push({
     checkName: 'MAX_PORTFOLIO_EXPOSURE',
@@ -128,7 +135,6 @@ export function evaluateRiskGates(
   });
   if (!passedExposure) rejectionReasons.push(`Portfolio exposure would exceed ${config.maxPortfolioExposurePct}%`);
 
-  // Gate 5: Max Daily Loss Circuit Breaker
   const passedDailyLoss = portfolio.dailyPnLPct > -config.maxDailyLossPct;
   checks.push({
     checkName: 'MAX_DAILY_LOSS',
@@ -142,7 +148,6 @@ export function evaluateRiskGates(
   });
   if (!passedDailyLoss) rejectionReasons.push('Daily loss circuit breaker triggered.');
 
-  // Gate 6: Maximum Drawdown Limit. At the limit is a breach, not a pass.
   const passedDrawdown = portfolio.currentDrawdownPct < config.maxDrawdownHaltPct;
   checks.push({
     checkName: 'MAX_PORTFOLIO_DRAWDOWN',
@@ -156,7 +161,6 @@ export function evaluateRiskGates(
   });
   if (!passedDrawdown) rejectionReasons.push('Portfolio drawdown threshold breached.');
 
-  // Gate 7: Max Trades Per Day
   const passedMaxTrades = context.todayExecutedTradesCount < config.maxTradesPerDay;
   checks.push({
     checkName: 'MAX_TRADES_PER_DAY',
@@ -170,9 +174,9 @@ export function evaluateRiskGates(
   });
   if (!passedMaxTrades) rejectionReasons.push('Daily trade count quota reached.');
 
-  // Gate 8: Order Frequency Throttle
+  const now = Date.now();
   const lastTime = context.lastOrderTimestamps[order.symbol] || 0;
-  const timeSinceLastOrderSec = (Date.now() - lastTime) / 1000;
+  const timeSinceLastOrderSec = (now - lastTime) / 1000;
   const passedFrequency = timeSinceLastOrderSec >= config.minOrderIntervalSeconds;
   checks.push({
     checkName: 'ORDER_FREQUENCY_THROTTLE',
@@ -182,11 +186,12 @@ export function evaluateRiskGates(
     thresholdLimit: `>= ${config.minOrderIntervalSeconds}s interval`,
     reason: passedFrequency
       ? 'Order frequency cooldown satisfied.'
-      : `Order throttling active on ${order.symbol}. Last order was ${timeSinceLastOrderSec.toFixed(1)}s ago (min: ${config.minOrderIntervalSeconds}s).`,
+      : timeSinceLastOrderSec < 0
+        ? 'Order rejected: last-order timestamp is in the future.'
+        : `Order throttling active on ${order.symbol}. Last order was ${timeSinceLastOrderSec.toFixed(1)}s ago (min: ${config.minOrderIntervalSeconds}s).`,
   });
-  if (!passedFrequency) rejectionReasons.push(`Order throttle active. Wait ${Math.ceil(config.minOrderIntervalSeconds - timeSinceLastOrderSec)}s.`);
+  if (!passedFrequency) rejectionReasons.push(timeSinceLastOrderSec < 0 ? 'Invalid future order timestamp in risk context.' : `Order throttle active. Wait ${Math.ceil(config.minOrderIntervalSeconds - timeSinceLastOrderSec)}s.`);
 
-  // Gate 9: Mandatory Stop Loss
   const hasStopLoss = typeof order.stopLossPrice === 'number' && order.stopLossPrice > 0;
   let validStopLoss = hasStopLoss;
   if (hasStopLoss) {
@@ -203,7 +208,6 @@ export function evaluateRiskGates(
   });
   if (!validStopLoss) rejectionReasons.push('Mandatory Stop-Loss missing or invalid.');
 
-  // Gate 10: Mandatory Take Profit
   const hasTakeProfit = typeof order.takeProfitPrice === 'number' && order.takeProfitPrice > 0;
   let validTakeProfit = hasTakeProfit;
   if (hasTakeProfit) {
@@ -220,7 +224,6 @@ export function evaluateRiskGates(
   });
   if (!validTakeProfit) rejectionReasons.push('Mandatory Take-Profit missing or invalid.');
 
-  // Gate 11: Risk / Reward Constraints
   const riskUnit = Math.abs(referencePrice - (order.stopLossPrice || referencePrice));
   const rewardUnit = Math.abs((order.takeProfitPrice || referencePrice) - referencePrice);
   const actualRR = riskUnit > 0 ? rewardUnit / riskUnit : 0;
@@ -235,7 +238,6 @@ export function evaluateRiskGates(
   });
   if (!passedRR) rejectionReasons.push(`Risk/reward ${actualRR.toFixed(2)}:1 below required ${config.minRiskRewardRatio}:1.`);
 
-  // Gate 12: Liquidity & Spread Tolerance. Invalid bid/ask must never become a zero spread.
   const spreadBps = validMarketPrices
     ? ((marketSnapshot.ask - marketSnapshot.bid) / marketSnapshot.bid) * 10000
     : Number.POSITIVE_INFINITY;
@@ -250,7 +252,6 @@ export function evaluateRiskGates(
   });
   if (!passedSpread) rejectionReasons.push('Invalid or excessive bid/ask spread.');
 
-  // Gate 13: Slippage Tolerance
   const estSlippage = order.estimatedSlippageBps ?? 5;
   const passedSlippage = Number.isFinite(estSlippage) && estSlippage >= 0 && estSlippage <= config.maxEstimatedSlippageBps;
   checks.push({
@@ -263,10 +264,16 @@ export function evaluateRiskGates(
   });
   if (!passedSlippage) rejectionReasons.push('Invalid or excessive slippage risk.');
 
-  // Gate 14: Duplicate Order Detection
   const duplicateWindowMs = config.enforceDuplicateWindowSeconds * 1000;
   const isDuplicate = context.recentOrders.some(
-    (o) => o.symbol === order.symbol && o.side === order.side && Math.abs(o.quantity - order.quantity) < 0.001 && Date.now() - o.timestamp < duplicateWindowMs
+    (o) => {
+      const ageMs = now - o.timestamp;
+      return o.symbol === order.symbol
+        && o.side === order.side
+        && Math.abs(o.quantity - order.quantity) < 0.001
+        && ageMs >= 0
+        && ageMs < duplicateWindowMs;
+    }
   );
   checks.push({
     checkName: 'DUPLICATE_ORDER_DETECTION',
@@ -278,8 +285,7 @@ export function evaluateRiskGates(
   });
   if (isDuplicate) rejectionReasons.push('Duplicate order detected within time window.');
 
-  // Gate 15: Stale Data Guard
-  const dataAgeMs = Date.now() - marketSnapshot.timestamp;
+  const dataAgeMs = now - marketSnapshot.timestamp;
   const passedDataFreshness = Number.isFinite(dataAgeMs) && dataAgeMs >= 0 && dataAgeMs <= config.maxDataStalenessMs && !marketSnapshot.dataQuality.isStale;
   checks.push({
     checkName: 'STALE_DATA_GUARD',
@@ -291,7 +297,6 @@ export function evaluateRiskGates(
   });
   if (!passedDataFreshness) rejectionReasons.push(`Stale or invalid market data feed (${dataAgeMs}ms age).`);
 
-  // Gate 16: Broker Connectivity Heartbeat
   const passedHeartbeat = context.brokerHeartbeatActive;
   checks.push({
     checkName: 'BROKER_CONNECTIVITY_HEARTBEAT',
@@ -306,7 +311,7 @@ export function evaluateRiskGates(
   const passedChecksCount = checks.filter((c) => c.passed).length;
   const failedChecksCount = checks.length - passedChecksCount;
   const isApproved = failedChecksCount === 0;
-  const auditableRiskToken = `RISK-VERDICT-${Date.now().toString(36).toUpperCase()}-${isApproved ? 'APPR' : 'REJT'}-${Math.floor(Math.random() * 9000 + 1000)}`;
+  const auditableRiskToken = `RISK-VERDICT-${Date.now().toString(36).toUpperCase()}-${isApproved ? 'APPR' : 'REJT'}-${secureRandomDigits(1000, 9999)}`;
 
   const enrichedChecks = checks.map((c) => ({
     ...c,
