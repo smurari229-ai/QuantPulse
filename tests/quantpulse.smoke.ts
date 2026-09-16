@@ -97,5 +97,34 @@ assert(backtest.outOfSampleMetrics.totalTrades === backtest.trades.filter(t => t
 assert(backtest.walkForwardResults.length <= params.walkForwardFolds, 'walk-forward result count respects requested folds');
 assert(backtest.equityCurve.every(point => Number.isFinite(point.equity) && Number.isFinite(point.drawdownPct)), 'equity curve values remain finite');
 
+// Slippage-model regression: ZERO must charge nothing, FIXED_BPS must use the
+// configured basis points, and VOLATILITY_SQUARE_ROOT must remain finite and
+// responsive to the ATR/price volatility proxy.
+const zeroSlippageBacktest = runFullBacktest(bars, { ...params, slippageModel: 'ZERO' });
+assert(zeroSlippageBacktest.combinedMetrics.totalSlippageCost === 0, 'ZERO slippage model charges zero slippage');
+assert(backtest.combinedMetrics.totalSlippageCost >= 0, 'FIXED_BPS slippage cost is non-negative');
+if (backtest.trades.length > 0) {
+  assert(backtest.combinedMetrics.totalSlippageCost > 0, 'FIXED_BPS slippage model charges configured impact when trades exist');
+}
+const volatilitySlippageBacktest = runFullBacktest(bars, { ...params, slippageModel: 'VOLATILITY_SQUARE_ROOT' });
+assert(Number.isFinite(volatilitySlippageBacktest.combinedMetrics.totalSlippageCost), 'VOLATILITY_SQUARE_ROOT slippage cost remains finite');
+assert(volatilitySlippageBacktest.combinedMetrics.totalSlippageCost >= 0, 'VOLATILITY_SQUARE_ROOT slippage cost is non-negative');
+
+let invalidCostRejected = false;
+try {
+  runFullBacktest(bars, { ...params, slippageBps: -1 });
+} catch {
+  invalidCostRejected = true;
+}
+assert(invalidCostRejected, 'negative slippage configuration is rejected');
+
+let invalidCommissionRejected = false;
+try {
+  runFullBacktest(bars, { ...params, commissionRatePct: Number.NaN });
+} catch {
+  invalidCommissionRejected = true;
+}
+assert(invalidCommissionRejected, 'non-finite commission configuration is rejected');
+
 console.log('QUANTPULSE SMOKE TESTS: PASS');
 console.log(JSON.stringify({ bars: bars.length, trades: backtest.trades.length, oosTrades: backtest.outOfSampleMetrics.totalTrades, walkForwardFolds: backtest.walkForwardResults.length }, null, 2));
