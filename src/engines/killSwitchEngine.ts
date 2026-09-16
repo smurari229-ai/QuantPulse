@@ -120,7 +120,7 @@ export function resetKillSwitchWithVerification(
     return {
       success: false,
       updatedState: currentState,
-      error: `Invalid authorization code. Expected ${currentState.resetConfirmationCode}`,
+      error: 'Invalid authorization code. Kill switch remains engaged.',
     };
   }
 
