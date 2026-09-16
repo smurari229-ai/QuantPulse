@@ -1,0 +1,6 @@
+{
+  "name": "QuantPulse AI Trading Platform",
+  "description": "Institutional-grade AI quantitative trading platform with market data validation, multi-strategy backtesting, deterministic risk engine, paper trading simulation, audit logs, and kill switch safety systems.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

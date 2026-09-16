@@ -1,0 +1,356 @@
+import React, { useState } from 'react';
+import { OHLCV, InstrumentMetadata, MarketDataSnapshot, MarketValidationResult } from '../../types/market';
+import { SUPPORTED_INSTRUMENTS } from '../../engines/marketDataEngine';
+import { ShieldCheck, AlertTriangle, Clock, Layers, DollarSign } from 'lucide-react';
+
+interface MarketOverviewViewProps {
+  selectedSymbol: string;
+  onSelectSymbol: (symbol: string) => void;
+  bars: OHLCV[];
+  snapshot: MarketDataSnapshot;
+  validationResult: MarketValidationResult;
+  isStaleData: boolean;
+}
+
+export const MarketOverviewView: React.FC<MarketOverviewViewProps> = ({
+  selectedSymbol,
+  onSelectSymbol,
+  bars,
+  snapshot,
+  validationResult,
+  isStaleData,
+}) => {
+  const [activeTab, setActiveTab] = useState<'chart' | 'metadata' | 'data_quality'>('chart');
+  const metadata = SUPPORTED_INSTRUMENTS.find((i) => i.symbol === selectedSymbol) || SUPPORTED_INSTRUMENTS[0];
+
+  // SVG Candlestick math
+  const visibleBars = bars.slice(-45);
+  const minPrice = visibleBars.length > 0 ? Math.min(...visibleBars.map((b) => b.low)) * 0.998 : 100;
+  const maxPrice = visibleBars.length > 0 ? Math.max(...visibleBars.map((b) => b.high)) * 1.002 : 200;
+  const priceRange = maxPrice - minPrice || 1;
+  const maxVol = visibleBars.length > 0 ? Math.max(...visibleBars.map((b) => b.volume)) : 1;
+
+  const chartHeight = 280;
+  const chartWidth = 720;
+  const barWidth = chartWidth / Math.max(1, visibleBars.length);
+
+  return (
+    <div className="space-y-6">
+      {/* Top Selector & Live Quote Ticker */}
+      <div className="bg-slate-900 border border-slate-800 rounded-lg p-4 flex flex-wrap items-center justify-between gap-4">
+        {/* Symbol Tabs */}
+        <div className="flex items-center space-x-2">
+          {SUPPORTED_INSTRUMENTS.map((inst) => (
+            <button
+              key={inst.symbol}
+              onClick={() => onSelectSymbol(inst.symbol)}
+              className={`px-3 py-1.5 rounded text-xs font-mono font-semibold transition-colors ${
+                selectedSymbol === inst.symbol
+                  ? 'bg-blue-600 text-white shadow-sm'
+                  : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+              }`}
+            >
+              {inst.symbol}
+            </button>
+          ))}
+        </div>
+
+        {/* Live quote */}
+        <div className="flex items-center space-x-6 text-xs font-mono">
+          <div>
+            <span className="text-slate-400">LAST: </span>
+            <span className="text-base font-bold text-slate-100">${snapshot.lastPrice.toFixed(2)}</span>
+          </div>
+          <div>
+            <span className="text-slate-400">BID: </span>
+            <span className="text-emerald-400 font-semibold">${snapshot.bid.toFixed(2)}</span>
+            <span className="text-[10px] text-slate-500 ml-1">({snapshot.bidSize})</span>
+          </div>
+          <div>
+            <span className="text-slate-400">ASK: </span>
+            <span className="text-rose-400 font-semibold">${snapshot.ask.toFixed(2)}</span>
+            <span className="text-[10px] text-slate-500 ml-1">({snapshot.askSize})</span>
+          </div>
+          <div>
+            <span className="text-slate-400">SPREAD: </span>
+            <span className="text-slate-300">
+              {(((snapshot.ask - snapshot.bid) / snapshot.bid) * 10000).toFixed(1)} bps
+            </span>
+          </div>
+          <div className="flex items-center space-x-1">
+            <Clock className={`w-3.5 h-3.5 ${isStaleData ? 'text-rose-400' : 'text-emerald-400'}`} />
+            <span className={isStaleData ? 'text-rose-400 font-bold' : 'text-emerald-400'}>
+              {snapshot.dataQuality.latencyMs}ms
+            </span>
+          </div>
+        </div>
+      </div>
+
+      {/* Main Container with Tabs */}
+      <div className="bg-slate-900 border border-slate-800 rounded-lg overflow-hidden">
+        <div className="px-4 py-2.5 bg-slate-950/40 border-b border-slate-800 flex justify-between items-center text-xs font-mono">
+          <div className="flex space-x-3">
+            <button
+              onClick={() => setActiveTab('chart')}
+              className={`pb-1 border-b-2 font-semibold ${
+                activeTab === 'chart'
+                  ? 'border-blue-500 text-blue-400'
+                  : 'border-transparent text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              OHLCV Candlestick & Volume Chart
+            </button>
+            <button
+              onClick={() => setActiveTab('data_quality')}
+              className={`pb-1 border-b-2 font-semibold flex items-center space-x-1.5 ${
+                activeTab === 'data_quality'
+                  ? 'border-blue-500 text-blue-400'
+                  : 'border-transparent text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <span>Data Engine Validation</span>
+              {validationResult.isValid ? (
+                <span className="w-2 h-2 rounded-full bg-emerald-400 inline-block" />
+              ) : (
+                <span className="w-2 h-2 rounded-full bg-rose-400 inline-block" />
+              )}
+            </button>
+            <button
+              onClick={() => setActiveTab('metadata')}
+              className={`pb-1 border-b-2 font-semibold ${
+                activeTab === 'metadata'
+                  ? 'border-blue-500 text-blue-400'
+                  : 'border-transparent text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              Instrument Specifications
+            </button>
+          </div>
+          <span className="text-[11px] text-slate-400">{metadata.exchange} · {metadata.currency} · 1-Day Intervals</span>
+        </div>
+
+        <div className="p-4">
+          {activeTab === 'chart' && (
+            <div className="space-y-2">
+              <div className="w-full overflow-x-auto bg-slate-950/80 rounded border border-slate-800/80 p-2">
+                <svg
+                  viewBox={`0 0 ${chartWidth} ${chartHeight}`}
+                  className="w-full h-72 block select-none"
+                  preserveAspectRatio="none"
+                >
+                  {/* Grid Lines */}
+                  {[0.25, 0.5, 0.75].map((pct) => {
+                    const y = chartHeight * pct;
+                    const price = maxPrice - pct * priceRange;
+                    return (
+                      <g key={pct}>
+                        <line x1="0" y1={y} x2={chartWidth} y2={y} stroke="#1e293b" strokeDasharray="3 3" />
+                        <text x={chartWidth - 50} y={y - 4} fill="#64748b" fontSize="9" fontFamily="monospace">
+                          ${price.toFixed(1)}
+                        </text>
+                      </g>
+                    );
+                  })}
+
+                  {/* Candlesticks */}
+                  {visibleBars.map((bar, idx) => {
+                    const x = idx * barWidth + barWidth * 0.15;
+                    const candleW = barWidth * 0.7;
+                    const isBull = bar.close >= bar.open;
+                    const color = isBull ? '#10b981' : '#f43f5e';
+
+                    // Coordinates
+                    const yHigh = ((maxPrice - bar.high) / priceRange) * (chartHeight * 0.75);
+                    const yLow = ((maxPrice - bar.low) / priceRange) * (chartHeight * 0.75);
+                    const yOpen = ((maxPrice - bar.open) / priceRange) * (chartHeight * 0.75);
+                    const yClose = ((maxPrice - bar.close) / priceRange) * (chartHeight * 0.75);
+                    const topBody = Math.min(yOpen, yClose);
+                    const bodyH = Math.max(2, Math.abs(yClose - yOpen));
+
+                    // Volume bar
+                    const volH = (bar.volume / maxVol) * (chartHeight * 0.20);
+                    const volY = chartHeight - volH;
+
+                    return (
+                      <g key={bar.timestamp}>
+                        {/* Wick */}
+                        <line
+                          x1={x + candleW / 2}
+                          y1={yHigh}
+                          x2={x + candleW / 2}
+                          y2={yLow}
+                          stroke={color}
+                          strokeWidth="1.2"
+                        />
+                        {/* Candle Body */}
+                        <rect
+                          x={x}
+                          y={topBody}
+                          width={candleW}
+                          height={bodyH}
+                          fill={color}
+                          rx="0.5"
+                        />
+                        {/* Volume Bar */}
+                        <rect
+                          x={x}
+                          y={volY}
+                          width={candleW}
+                          height={volH}
+                          fill={color}
+                          opacity="0.35"
+                        />
+                      </g>
+                    );
+                  })}
+                </svg>
+              </div>
+              <div className="flex justify-between items-center text-[11px] font-mono text-slate-400 px-1">
+                <span>Displaying {visibleBars.length} daily bars</span>
+                <div className="flex items-center space-x-3">
+                  <span className="flex items-center space-x-1">
+                    <span className="w-2.5 h-2.5 rounded-sm bg-emerald-500 inline-block" />
+                    <span>Bullish Close</span>
+                  </span>
+                  <span className="flex items-center space-x-1">
+                    <span className="w-2.5 h-2.5 rounded-sm bg-rose-500 inline-block" />
+                    <span>Bearish Close</span>
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'data_quality' && (
+            <div className="space-y-4 font-mono text-xs">
+              <div className="flex items-center justify-between p-3 bg-slate-950/60 rounded border border-slate-800">
+                <div className="flex items-center space-x-2">
+                  {validationResult.isValid ? (
+                    <ShieldCheck className="w-5 h-5 text-emerald-400" />
+                  ) : (
+                    <AlertTriangle className="w-5 h-5 text-rose-400" />
+                  )}
+                  <div>
+                    <div className="font-bold text-slate-200">
+                      Market Data Engine Health: {validationResult.isValid ? 'VERIFIED (PASS)' : 'CORRUPTED (REJECT)'}
+                    </div>
+                    <div className="text-[11px] text-slate-400">
+                      Continuous real-time verification of timestamps, geometry, zero-volumes, and feed latency.
+                    </div>
+                  </div>
+                </div>
+                <span className="px-2 py-1 rounded bg-slate-800 text-slate-300 font-bold text-[11px]">
+                  Provider: {snapshot.dataQuality.provider}
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div className="p-3 bg-slate-950/40 rounded border border-slate-800/80 space-y-2">
+                  <span className="font-bold text-slate-300 text-[11px] uppercase">Anomaly Detection Checks:</span>
+                  <div className="space-y-1.5 text-[11px]">
+                    <div className="flex justify-between">
+                      <span className="text-slate-400">Non-positive (Negative) Price:</span>
+                      <span className={validationResult.anomaliesDetected.negativePrice ? 'text-rose-400 font-bold' : 'text-emerald-400'}>
+                        {validationResult.anomaliesDetected.negativePrice ? 'DETECTED' : 'CLEAR'}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-400">High/Low Geometrical Inversion:</span>
+                      <span className={validationResult.anomaliesDetected.highLowInversion ? 'text-rose-400 font-bold' : 'text-emerald-400'}>
+                        {validationResult.anomaliesDetected.highLowInversion ? 'DETECTED' : 'CLEAR'}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-400">Extreme Jump (&gt;20% single bar):</span>
+                      <span className={validationResult.anomaliesDetected.priceGapExceedsThreshold ? 'text-amber-400 font-bold' : 'text-emerald-400'}>
+                        {validationResult.anomaliesDetected.priceGapExceedsThreshold ? 'FLAGGED' : 'CLEAR'}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-400">Non-Monotonic Timestamps:</span>
+                      <span className={validationResult.anomaliesDetected.staleTimestamp ? 'text-rose-400 font-bold' : 'text-emerald-400'}>
+                        {validationResult.anomaliesDetected.staleTimestamp ? 'OUT OF ORDER' : 'CHRONOLOGICAL'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="p-3 bg-slate-950/40 rounded border border-slate-800/80 space-y-2">
+                  <span className="font-bold text-slate-300 text-[11px] uppercase">Live Latency & Staleness:</span>
+                  <div className="space-y-1.5 text-[11px]">
+                    <div className="flex justify-between">
+                      <span className="text-slate-400">Feed Latency:</span>
+                      <span className={snapshot.dataQuality.latencyMs > 3000 ? 'text-rose-400 font-bold' : 'text-emerald-400'}>
+                        {snapshot.dataQuality.latencyMs} ms
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-400">Staleness Status:</span>
+                      <span className={snapshot.dataQuality.isStale ? 'text-rose-400 font-bold' : 'text-emerald-400'}>
+                        {snapshot.dataQuality.isStale ? 'STALE FEED (TRADING HALTED)' : 'FRESH'}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-400">Max Permitted Staleness:</span>
+                      <span className="text-slate-300">3000 ms</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-400">Missing Candles Count:</span>
+                      <span className="text-slate-300">{snapshot.dataQuality.missingCandlesCount}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {validationResult.errors.length > 0 && (
+                <div className="p-3 bg-rose-950/40 border border-rose-800/80 rounded text-rose-300 text-xs">
+                  <span className="font-bold block mb-1">DATA VALIDATION ERRORS:</span>
+                  <ul className="list-disc pl-4 space-y-0.5">
+                    {validationResult.errors.map((err, i) => (
+                      <li key={i}>{err}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          )}
+
+          {activeTab === 'metadata' && (
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-4 font-mono text-xs">
+              <div className="p-3 bg-slate-950/40 rounded border border-slate-800">
+                <span className="text-slate-400 block text-[10px]">ASSET CLASS</span>
+                <span className="font-bold text-slate-100">{metadata.assetClass}</span>
+              </div>
+              <div className="p-3 bg-slate-950/40 rounded border border-slate-800">
+                <span className="text-slate-400 block text-[10px]">EXCHANGE</span>
+                <span className="font-bold text-slate-100">{metadata.exchange}</span>
+              </div>
+              <div className="p-3 bg-slate-950/40 rounded border border-slate-800">
+                <span className="text-slate-400 block text-[10px]">BASE CURRENCY</span>
+                <span className="font-bold text-slate-100">{metadata.currency}</span>
+              </div>
+              <div className="p-3 bg-slate-950/40 rounded border border-slate-800">
+                <span className="text-slate-400 block text-[10px]">TICK SIZE</span>
+                <span className="font-bold text-slate-100">{metadata.tickSize}</span>
+              </div>
+              <div className="p-3 bg-slate-950/40 rounded border border-slate-800">
+                <span className="text-slate-400 block text-[10px]">LOT SIZE</span>
+                <span className="font-bold text-slate-100">{metadata.lotSize}</span>
+              </div>
+              <div className="p-3 bg-slate-950/40 rounded border border-slate-800">
+                <span className="text-slate-400 block text-[10px]">MARGIN REQUIREMENT</span>
+                <span className="font-bold text-slate-100">{(metadata.marginRequirement * 100).toFixed(0)}% (Max {metadata.maxLeverage}x Leverage)</span>
+              </div>
+              <div className="p-3 bg-slate-950/40 rounded border border-slate-800 col-span-2 md:col-span-3">
+                <span className="text-slate-400 block text-[10px]">TRADING SESSION HOURS</span>
+                <span className="font-bold text-slate-100">
+                  {metadata.tradingHours.open} - {metadata.tradingHours.close} ({metadata.tradingHours.timezone})
+                </span>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
