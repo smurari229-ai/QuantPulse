@@ -32,7 +32,7 @@ const sellResult = executePaperOrder(sellOrder, buyResult.updatedPortfolio, snap
 assert(sellResult.status === 'FILLED' && sellResult.updatedPortfolio.positions.length === 0, 'paper SELL closes the held position');
 const invalidSell = executePaperOrder(sellOrder, INITIAL_PORTFOLIO_STATE, snapshot);
 assert(invalidSell.status === 'REJECTED', 'paper SELL without a position is rejected');
-const params: BacktestParameters = { symbol: 'NIFTY50', initialCapital: 100000, positionSizingPct: 10, slippageBps: 4.5, commissionRatePct: 0.03, taxRatePct: 0.01, outOfSampleSplitRatio: 0.2, enableWalkForward: true };
+const params: BacktestParameters = { strategyId: 'SMOKE_TREND', symbol: 'NIFTY50', startDate: new Date(bars[0].timestamp).toISOString(), endDate: new Date(bars[bars.length - 1].timestamp).toISOString(), initialCapital: 100000, slippageModel: 'FIXED_BPS', slippageBps: 4.5, commissionRatePct: 0.03, taxRatePct: 0.01, outOfSampleSplitRatio: 0.2, enableWalkForward: true, walkForwardFolds: 3, positionSizingPct: 10 };
 const backtest = runFullBacktest(bars, params);
 assert(backtest.equityCurve.length === bars.length, 'backtest equity curve covers all bars');
 assert(backtest.trades.every(t => t.entryTimestamp <= t.exitTimestamp), 'backtest trade timestamps are ordered');
