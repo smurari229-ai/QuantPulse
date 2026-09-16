@@ -2,7 +2,10 @@ import { AuditRecord, AuditEventType, AuditChainIntegrity } from '../types/audit
 
 export type { AuditRecord, AuditEventType, AuditChainIntegrity };
 
-// Lightweight fast deterministic SHA-256 equivalent for log chaining without async blocking
+// Lightweight deterministic non-cryptographic hash used only for in-memory
+// tamper-evident chaining. This is intentionally not described as SHA-256 or
+// as a security primitive; production audit storage must use a real cryptographic
+// hash and durable server-side controls.
 function fastHash(str: string): string {
   let h1 = 0xdeadbeef, h2 = 0x41c6ce57;
   for (let i = 0, ch; i < str.length; i++) {
@@ -27,7 +30,7 @@ export class AuditLogChain {
     this.appendRecord(
       'SYSTEM_HEALTH_ALERT',
       'SECURITY',
-      { message: 'Audit log cryptographic ledger initialized. Genesis block created.' },
+      { message: 'Tamper-evident audit chain initialized. Genesis block created.' },
       'INFO'
     );
   }
@@ -91,33 +94,18 @@ export class AuditLogChain {
       const expectedPrevHash = i === 0 ? INITIAL_GENESIS_HASH : this.records[i - 1].recordHash;
 
       if (current.previousHash !== expectedPrevHash) {
-        return {
-          isValid: false,
-          totalRecords: this.records.length,
-          tamperedRecordIndex: i,
-          lastVerifiedTimestamp: Date.now(),
-        };
+        return { isValid: false, totalRecords: this.records.length, tamperedRecordIndex: i, lastVerifiedTimestamp: Date.now() };
       }
 
       const payload = `${current.sequenceNumber}:${current.timestamp}:${current.eventType}:${current.sourceModule}:${JSON.stringify(current.details)}:${current.previousHash}`;
       const recomputedHash = fastHash(payload);
 
       if (recomputedHash !== current.recordHash) {
-        return {
-          isValid: false,
-          totalRecords: this.records.length,
-          tamperedRecordIndex: i,
-          lastVerifiedTimestamp: Date.now(),
-        };
+        return { isValid: false, totalRecords: this.records.length, tamperedRecordIndex: i, lastVerifiedTimestamp: Date.now() };
       }
     }
 
-    return {
-      isValid: true,
-      totalRecords: this.records.length,
-      tamperedRecordIndex: null,
-      lastVerifiedTimestamp: Date.now(),
-    };
+    return { isValid: true, totalRecords: this.records.length, tamperedRecordIndex: null, lastVerifiedTimestamp: Date.now() };
   }
 }
 
