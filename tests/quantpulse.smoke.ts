@@ -1,5 +1,5 @@
 import { generateSyntheticDailyBars, generateMarketSnapshot, validateMarketDataSeries } from '../src/engines/marketDataEngine';
-import { evaluateRiskGates } from '../src/engines/riskEngine';
+import { evaluateRiskGates, DEFAULT_RISK_CONFIG } from '../src/engines/riskEngine';
 import { INITIAL_PORTFOLIO_STATE, executePaperOrder } from '../src/engines/paperTradingEngine';
 import { triggerEmergencyKillSwitch, resetKillSwitchWithVerification } from '../src/engines/killSwitchEngine';
 import { runFullBacktest } from '../src/engines/backtestingLab';
@@ -51,6 +51,15 @@ const malformedOrder = { ...baseOrder, quantity: -1 };
 const malformedVerdict = evaluateRiskGates(malformedOrder, INITIAL_PORTFOLIO_STATE, snapshot);
 assert(!malformedVerdict.isApproved, 'negative order quantity is rejected');
 assert(malformedVerdict.checks.some(c => c.checkName === 'ORDER_MARKET_SANITY' && !c.passed), 'order sanity gate rejects malformed quantity');
+
+// SettingsView saves by updating the shared runtime config object. Verify that
+// omitted-config risk evaluations observe the saved boundary, then restore it.
+const originalMaxNotional = DEFAULT_RISK_CONFIG.maxPositionSizeNotional;
+Object.assign(DEFAULT_RISK_CONFIG, { maxPositionSizeNotional: 1 });
+const settingsDrivenVerdict = evaluateRiskGates(baseOrder, INITIAL_PORTFOLIO_STATE, snapshot);
+assert(!settingsDrivenVerdict.isApproved, 'saved risk boundary is enforced by runtime risk evaluation');
+assert(settingsDrivenVerdict.rejectionReasons.some(reason => reason.includes('Position size exceeds $1')), 'runtime verdict reflects saved notional boundary');
+Object.assign(DEFAULT_RISK_CONFIG, { maxPositionSizeNotional: originalMaxNotional });
 
 const killState = triggerEmergencyKillSwitch('smoke-test');
 const killVerdict = evaluateRiskGates(baseOrder, INITIAL_PORTFOLIO_STATE, snapshot, { isEmergencyKillSwitchActive: killState.isEmergencyStopTripped });
