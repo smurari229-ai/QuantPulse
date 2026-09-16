@@ -13,6 +13,17 @@ function assert(condition: unknown, message: string): asserts condition {
 const bars = generateSyntheticDailyBars('NIFTY50', 120);
 assert(bars.length === 120, 'synthetic market generator returns requested bar count');
 assert(validateMarketDataSeries(bars).isValid, 'generated market data passes validation');
+
+const malformedBars = bars.map((bar) => ({ ...bar }));
+malformedBars[10].close = Number.NaN;
+const malformedMarketValidation = validateMarketDataSeries(malformedBars);
+assert(!malformedMarketValidation.isValid, 'non-finite market price is rejected');
+assert(malformedMarketValidation.errors.some(e => e.includes('Non-finite')), 'non-finite market error is reported safely');
+
+const malformedTimestampBars = bars.map((bar) => ({ ...bar }));
+malformedTimestampBars[5].timestamp = Number.NaN;
+assert(!validateMarketDataSeries(malformedTimestampBars).isValid, 'non-finite timestamp is rejected without validator crash');
+
 const snapshot = generateMarketSnapshot('NIFTY50', bars[bars.length - 1].close);
 
 const baseOrder: OrderRequest = {
