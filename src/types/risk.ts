@@ -1,22 +1,25 @@
 export interface RiskEngineConfig {
-  maxPositionSizeNotional: number; // e.g. $25,000 max per single position
-  maxPositionPctOfPortfolio: number; // e.g. 20% max
-  maxPortfolioExposurePct: number; // e.g. 70% max invested capital
-  maxDailyLossPct: number; // e.g. 3.0% daily halt
-  maxDrawdownHaltPct: number; // e.g. 8.0% circuit breaker
-  maxTradesPerDay: number; // e.g. 15 trades
-  minOrderIntervalSeconds: number; // e.g. minimum 30s between orders on same asset (prevents frequency spikes)
-  minRiskRewardRatio: number; // e.g. 1.5:1 min
-  maxEstimatedSlippageBps: number; // e.g. 25 bps (0.25%)
-  maxDataStalenessMs: number; // e.g. 3000ms max allowed data age
-  requireStopLoss: boolean; // must always be true
-  requireTakeProfit: boolean; // must always be true
-  maxSpreadBps: number; // e.g. 20 bps
-  enforceDuplicateWindowSeconds: number; // e.g. 60 seconds duplicate filter
+  maxPositionSizeNotional: number;
+  maxPositionPctOfPortfolio: number;
+  maxPortfolioExposurePct: number;
+  maxDailyLossPct: number;
+  maxDrawdownHaltPct: number;
+  maxTradesPerDay: number;
+  minOrderIntervalSeconds: number;
+  minRiskRewardRatio: number;
+  maxEstimatedSlippageBps: number;
+  maxDataStalenessMs: number;
+  requireStopLoss: boolean;
+  requireTakeProfit: boolean;
+  maxSpreadBps: number;
+  enforceDuplicateWindowSeconds: number;
 }
 
 export type RiskCheckName =
+  | 'ORDER_MARKET_SANITY'
   | 'MAX_POSITION_SIZE'
+  | 'MAX_POSITION_NOTIONAL'
+  | 'MAX_POSITION_PCT_OF_PORTFOLIO'
   | 'MAX_PORTFOLIO_EXPOSURE'
   | 'MAX_DAILY_LOSS'
   | 'MAX_PORTFOLIO_DRAWDOWN'
