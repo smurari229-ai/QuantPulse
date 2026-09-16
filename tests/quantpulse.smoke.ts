@@ -3,6 +3,7 @@ import { evaluateRiskGates, DEFAULT_RISK_CONFIG } from '../src/engines/riskEngin
 import { INITIAL_PORTFOLIO_STATE, executePaperOrder } from '../src/engines/paperTradingEngine';
 import { triggerEmergencyKillSwitch, resetKillSwitchWithVerification } from '../src/engines/killSwitchEngine';
 import { runFullBacktest } from '../src/engines/backtestingLab';
+import { AuditLogChain } from '../src/engines/auditEngine';
 import type { OrderRequest } from '../src/types/order';
 import type { BacktestParameters } from '../src/types/backtest';
 
@@ -46,14 +47,34 @@ const riskCheckNames = staleVerdict.checks.map(c => c.checkName);
 assert(new Set(riskCheckNames).size === riskCheckNames.length, 'risk gate check names are unique');
 assert(riskCheckNames.includes('MAX_POSITION_NOTIONAL'), 'notional gate has stable unique identity');
 assert(riskCheckNames.includes('MAX_POSITION_PCT_OF_PORTFOLIO'), 'portfolio-percent gate has stable unique identity');
+assert(/^RISK-VERDICT-.*-(APPR|REJT)-\d{4}$/.test(staleVerdict.auditableRiskToken), 'risk verdict token has expected non-predictable suffix format');
 
 const malformedOrder = { ...baseOrder, quantity: -1 };
 const malformedVerdict = evaluateRiskGates(malformedOrder, INITIAL_PORTFOLIO_STATE, snapshot);
 assert(!malformedVerdict.isApproved, 'negative order quantity is rejected');
 assert(malformedVerdict.checks.some(c => c.checkName === 'ORDER_MARKET_SANITY' && !c.passed), 'order sanity gate rejects malformed quantity');
 
-// SettingsView saves by updating the shared runtime config object. Verify that
-// omitted-config risk evaluations observe the saved boundary, then restore it.
+const invalidEstimatedPriceOrder = { ...baseOrder, estimatedPrice: 0 };
+const invalidEstimatedPriceVerdict = evaluateRiskGates(invalidEstimatedPriceOrder, INITIAL_PORTFOLIO_STATE, snapshot);
+assert(invalidEstimatedPriceVerdict.checks.some(c => c.checkName === 'ORDER_MARKET_SANITY' && !c.passed), 'explicit zero estimated price is rejected instead of silently falling back');
+
+const futureOrderTimestampVerdict = evaluateRiskGates(
+  baseOrder,
+  INITIAL_PORTFOLIO_STATE,
+  snapshot,
+  { lastOrderTimestamps: { NIFTY50: Date.now() + 60_000 } }
+);
+assert(!futureOrderTimestampVerdict.checks.find(c => c.checkName === 'ORDER_FREQUENCY_THROTTLE')?.passed, 'future last-order timestamp is rejected');
+assert(futureOrderTimestampVerdict.rejectionReasons.some(reason => reason.includes('future order timestamp')), 'future order timestamp produces explicit rejection reason');
+
+const futureDuplicateVerdict = evaluateRiskGates(
+  baseOrder,
+  INITIAL_PORTFOLIO_STATE,
+  snapshot,
+  { recentOrders: [{ id: 'FUTURE', symbol: 'NIFTY50', side: 'BUY', quantity: 1, timestamp: Date.now() + 60_000 }] }
+);
+assert(futureDuplicateVerdict.checks.find(c => c.checkName === 'DUPLICATE_ORDER_DETECTION')?.passed, 'future order record is not misclassified as a duplicate');
+
 const originalMaxNotional = DEFAULT_RISK_CONFIG.maxPositionSizeNotional;
 Object.assign(DEFAULT_RISK_CONFIG, { maxPositionSizeNotional: 1 });
 const settingsDrivenVerdict = evaluateRiskGates(baseOrder, INITIAL_PORTFOLIO_STATE, snapshot);
@@ -62,6 +83,7 @@ assert(settingsDrivenVerdict.rejectionReasons.some(reason => reason.includes('Po
 Object.assign(DEFAULT_RISK_CONFIG, { maxPositionSizeNotional: originalMaxNotional });
 
 const killState = triggerEmergencyKillSwitch('smoke-test');
+assert(/^\d{6}$/.test(killState.resetConfirmationCode), 'kill-switch reset code is a six-digit numeric authorization code');
 const killVerdict = evaluateRiskGates(baseOrder, INITIAL_PORTFOLIO_STATE, snapshot, { isEmergencyKillSwitchActive: killState.isEmergencyStopTripped });
 assert(!killVerdict.isApproved, 'kill switch blocks risk approval');
 assert(killVerdict.checks.some(c => c.currentValue === 'ACTIVE_HALTED'), 'kill-switch gate reports active halt');
@@ -69,6 +91,14 @@ const badReset = resetKillSwitchWithVerification(killState, 'WRONG');
 assert(!badReset.success && badReset.updatedState.isEmergencyStopTripped, 'wrong reset code keeps kill switch engaged');
 const goodReset = resetKillSwitchWithVerification(killState, killState.resetConfirmationCode);
 assert(goodReset.success && !goodReset.updatedState.isEmergencyStopTripped, 'correct reset code re-arms sandbox');
+
+const auditLedger = new AuditLogChain();
+const auditRecord = auditLedger.appendRecord('ORDER_REJECTED', 'RISK_ENGINE', { apiKey: 'SECRET', symbol: 'NIFTY50' }, 'WARN');
+assert(auditLedger.verifyChainIntegrity(), 'audit chain verifies immediately after append');
+assert(!('apiKey' in auditRecord.details), 'audit records do not retain apiKey secrets');
+const tamperRecord = auditLedger.getAllRecords(2)[0];
+tamperRecord.details.symbol = 'TAMPERED';
+assert(!auditLedger.verifyChainIntegrity(), 'audit chain detects record tampering');
 
 const buyResult = executePaperOrder(baseOrder, INITIAL_PORTFOLIO_STATE, snapshot);
 assert(buyResult.status === 'FILLED' && buyResult.updatedPortfolio.positions.length === 1, 'paper BUY creates a position');
@@ -97,33 +127,20 @@ assert(backtest.outOfSampleMetrics.totalTrades === backtest.trades.filter(t => t
 assert(backtest.walkForwardResults.length <= params.walkForwardFolds, 'walk-forward result count respects requested folds');
 assert(backtest.equityCurve.every(point => Number.isFinite(point.equity) && Number.isFinite(point.drawdownPct)), 'equity curve values remain finite');
 
-// Slippage-model regression: ZERO must charge nothing, FIXED_BPS must use the
-// configured basis points, and VOLATILITY_SQUARE_ROOT must remain finite and
-// responsive to the ATR/price volatility proxy.
 const zeroSlippageBacktest = runFullBacktest(bars, { ...params, slippageModel: 'ZERO' });
 assert(zeroSlippageBacktest.combinedMetrics.totalSlippageCost === 0, 'ZERO slippage model charges zero slippage');
 assert(backtest.combinedMetrics.totalSlippageCost >= 0, 'FIXED_BPS slippage cost is non-negative');
-if (backtest.trades.length > 0) {
-  assert(backtest.combinedMetrics.totalSlippageCost > 0, 'FIXED_BPS slippage model charges configured impact when trades exist');
-}
+if (backtest.trades.length > 0) assert(backtest.combinedMetrics.totalSlippageCost > 0, 'FIXED_BPS slippage model charges configured impact when trades exist');
 const volatilitySlippageBacktest = runFullBacktest(bars, { ...params, slippageModel: 'VOLATILITY_SQUARE_ROOT' });
 assert(Number.isFinite(volatilitySlippageBacktest.combinedMetrics.totalSlippageCost), 'VOLATILITY_SQUARE_ROOT slippage cost remains finite');
 assert(volatilitySlippageBacktest.combinedMetrics.totalSlippageCost >= 0, 'VOLATILITY_SQUARE_ROOT slippage cost is non-negative');
 
 let invalidCostRejected = false;
-try {
-  runFullBacktest(bars, { ...params, slippageBps: -1 });
-} catch {
-  invalidCostRejected = true;
-}
+try { runFullBacktest(bars, { ...params, slippageBps: -1 }); } catch { invalidCostRejected = true; }
 assert(invalidCostRejected, 'negative slippage configuration is rejected');
 
 let invalidCommissionRejected = false;
-try {
-  runFullBacktest(bars, { ...params, commissionRatePct: Number.NaN });
-} catch {
-  invalidCommissionRejected = true;
-}
+try { runFullBacktest(bars, { ...params, commissionRatePct: Number.NaN }); } catch { invalidCommissionRejected = true; }
 assert(invalidCommissionRejected, 'non-finite commission configuration is rejected');
 
 console.log('QUANTPULSE SMOKE TESTS: PASS');
