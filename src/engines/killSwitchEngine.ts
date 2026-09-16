@@ -24,25 +24,19 @@ export const INITIAL_KILL_SWITCH_STATE: KillSwitchState = {
   resetConfirmationCode: '',
 };
 
+function generateSecureConfirmationCode(): string {
+  const values = new Uint32Array(1);
+  globalThis.crypto.getRandomValues(values);
+  return (values[0] % 1_000_000).toString().padStart(6, '0');
+}
+
 export function canSubmitOrders(state: KillSwitchState): { allowed: boolean; reason?: string } {
-  if (state.isGlobalTradingOff) {
-    return { allowed: false, reason: 'GLOBAL_TRADING_OFF_SWITCH_ENGAGED' };
-  }
-  if (state.isEmergencyStopTripped) {
-    return { allowed: false, reason: 'EMERGENCY_STOP_CIRCUIT_BREAKER_ACTIVE' };
-  }
-  if (state.isDailyLossLockTripped) {
-    return { allowed: false, reason: 'DAILY_LOSS_LIMIT_LOCK_ACTIVE' };
-  }
-  if (state.isApiFailureLockTripped) {
-    return { allowed: false, reason: 'BROKER_API_FAILURE_LOCK_ACTIVE' };
-  }
-  if (state.isDataStaleLockTripped) {
-    return { allowed: false, reason: 'STALE_MARKET_DATA_LOCK_ACTIVE' };
-  }
-  if (state.isAbnormalFrequencyLockTripped) {
-    return { allowed: false, reason: 'ABNORMAL_ORDER_FREQUENCY_LOCK_ACTIVE' };
-  }
+  if (state.isGlobalTradingOff) return { allowed: false, reason: 'GLOBAL_TRADING_OFF_SWITCH_ENGAGED' };
+  if (state.isEmergencyStopTripped) return { allowed: false, reason: 'EMERGENCY_STOP_CIRCUIT_BREAKER_ACTIVE' };
+  if (state.isDailyLossLockTripped) return { allowed: false, reason: 'DAILY_LOSS_LIMIT_LOCK_ACTIVE' };
+  if (state.isApiFailureLockTripped) return { allowed: false, reason: 'BROKER_API_FAILURE_LOCK_ACTIVE' };
+  if (state.isDataStaleLockTripped) return { allowed: false, reason: 'STALE_MARKET_DATA_LOCK_ACTIVE' };
+  if (state.isAbnormalFrequencyLockTripped) return { allowed: false, reason: 'ABNORMAL_ORDER_FREQUENCY_LOCK_ACTIVE' };
   return { allowed: true };
 }
 
@@ -55,23 +49,19 @@ export function triggerEmergencyKillSwitch(
   let currentState: KillSwitchState = INITIAL_KILL_SWITCH_STATE;
   let reason = 'Manual Emergency Kill Switch Triggered';
 
-  if (typeof stateOrReason === 'string') {
-    reason = stateOrReason;
-  } else {
+  if (typeof stateOrReason === 'string') reason = stateOrReason;
+  else {
     currentState = stateOrReason;
-    if (typeof maybeReason === 'string') {
-      reason = maybeReason;
-    }
+    if (typeof maybeReason === 'string') reason = maybeReason;
   }
 
-  const code = Math.random().toString(36).substring(2, 8).toUpperCase();
   return {
     ...currentState,
     isEmergencyStopTripped: true,
     lastTrippedTimestamp: Date.now(),
     lastTrippedReason: reason,
     requiresDualManualReset: true,
-    resetConfirmationCode: code,
+    resetConfirmationCode: generateSecureConfirmationCode(),
   };
 }
 
@@ -81,19 +71,10 @@ export function resetKillSwitch(
 ): { success: boolean; state?: KillSwitchState; updatedState?: KillSwitchState; error?: string } {
   let state = INITIAL_KILL_SWITCH_STATE;
   let code = '';
-  if (typeof currentStateOrCode === 'string') {
-    code = currentStateOrCode;
-  } else {
-    state = currentStateOrCode;
-    code = maybeCode || '';
-  }
+  if (typeof currentStateOrCode === 'string') code = currentStateOrCode;
+  else { state = currentStateOrCode; code = maybeCode || ''; }
   const res = resetKillSwitchWithVerification(state, code);
-  return {
-    success: res.success,
-    state: res.updatedState,
-    updatedState: res.updatedState,
-    error: res.error,
-  };
+  return { success: res.success, state: res.updatedState, updatedState: res.updatedState, error: res.error };
 }
 
 export function resetKillSwitchWithVerification(
@@ -117,11 +98,7 @@ export function resetKillSwitchWithVerification(
   }
 
   if (enteredCode.trim().toUpperCase() !== currentState.resetConfirmationCode) {
-    return {
-      success: false,
-      updatedState: currentState,
-      error: 'Invalid authorization code. Kill switch remains engaged.',
-    };
+    return { success: false, updatedState: currentState, error: 'Invalid authorization code. Kill switch remains engaged.' };
   }
 
   return {
