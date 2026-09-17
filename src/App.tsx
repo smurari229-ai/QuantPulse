@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { Header } from './components/Header';
 import { Sidebar, NavViewId } from './components/Sidebar';
 import { PortfolioView } from './components/views/PortfolioView';
@@ -21,6 +21,7 @@ import { SettingsView } from './components/views/SettingsView';
 import { generateSyntheticDailyBars, generateMarketSnapshot, validateMarketDataSeries } from './engines/marketDataEngine';
 import { computeAllIndicators } from './engines/marketAnalysisEngine';
 import { generateAIDecision } from './engines/aiDecisionEngine';
+import { getNewsSentimentForSymbol } from './engines/newsEventEngine';
 import { evaluateRiskGates, DEFAULT_RISK_CONFIG, RecentOrderContext } from './engines/riskEngine';
 import { INITIAL_PORTFOLIO_STATE } from './engines/paperTradingEngine';
 import { getKillSwitchState, triggerEmergencyKillSwitch, KillSwitchState } from './engines/killSwitchEngine';
@@ -38,7 +39,21 @@ export default function App() {
   const validationResult = useMemo(() => validateMarketDataSeries(bars), [bars]);
   const indicators = useMemo(() => computeAllIndicators(bars), [bars]);
   const killActive = killSwitchState.isGlobalTradingOff || killSwitchState.isEmergencyStopTripped || killSwitchState.isDailyLossLockTripped || killSwitchState.isApiFailureLockTripped || killSwitchState.isDataStaleLockTripped || killSwitchState.isAbnormalFrequencyLockTripped;
-  const [aiDecision, setAiDecision] = useState(() => generateAIDecision({ symbol: selectedSymbol, timestamp: Date.now(), currentPrice: marketSnapshot.lastPrice, indicators, currentMarketConditions: { spreadBps: 4.2, dataStalenessMs: marketSnapshot.dataQuality.latencyMs } }));
+  const [aiDecision, setAiDecision] = useState(() => generateAIDecision({ symbol: selectedSymbol, timestamp: Date.now(), currentPrice: marketSnapshot.lastPrice, indicators, newsSentiment: { score: getNewsSentimentForSymbol(selectedSymbol).avgSentiment }, currentMarketConditions: { spreadBps: ((marketSnapshot.ask - marketSnapshot.bid) / marketSnapshot.bid) * 10000, dataStalenessMs: Date.now() - marketSnapshot.timestamp } }));
+
+  useEffect(() => {
+    const dataStalenessMs = Math.max(0, Date.now() - marketSnapshot.timestamp);
+    const spreadBps = marketSnapshot.bid > 0 ? ((marketSnapshot.ask - marketSnapshot.bid) / marketSnapshot.bid) * 10000 : Number.POSITIVE_INFINITY;
+    const newsSentiment = getNewsSentimentForSymbol(selectedSymbol);
+    setAiDecision(generateAIDecision({
+      symbol: selectedSymbol,
+      timestamp: Date.now(),
+      currentPrice: marketSnapshot.lastPrice,
+      indicators,
+      newsSentiment: { score: newsSentiment.avgSentiment },
+      currentMarketConditions: { spreadBps, dataStalenessMs },
+    }));
+  }, [selectedSymbol, marketSnapshot, indicators]);
 
   const riskContext = useMemo<RecentOrderContext>(() => {
     const today = new Date();
@@ -84,8 +99,6 @@ export default function App() {
     setBars(newBars);
     const newSnap = generateMarketSnapshot(newSymbol, newBars[newBars.length - 1].close);
     setMarketSnapshot(newSnap);
-    const newIndicators = computeAllIndicators(newBars);
-    setAiDecision(generateAIDecision({ symbol: newSymbol, timestamp: Date.now(), currentPrice: newSnap.lastPrice, indicators: newIndicators, currentMarketConditions: { spreadBps: 4.5, dataStalenessMs: newSnap.dataQuality.latencyMs } }));
     const dummyOrder: OrderRequest = { id: `AUD-${Date.now().toString().slice(-4)}`, orderId: `AUD-${Date.now().toString().slice(-4)}`, clientOrderId: `CLI-${Date.now()}`, symbol: newSymbol, side: 'BUY', type: 'MARKET', quantity: 10, limitPrice: newSnap.lastPrice, stopLossPrice: Math.round(newSnap.lastPrice * 0.96), takeProfitPrice: Math.round(newSnap.lastPrice * 1.08), executionMode: 'PAPER', timestamp: Date.now() };
     setCurrentVerdict(evaluateRiskGates(dummyOrder, portfolio, newSnap, { ...riskContext, isEmergencyKillSwitchActive: killActive }, DEFAULT_RISK_CONFIG));
   }, [portfolio, killActive, riskContext]);
