@@ -11,16 +11,31 @@ export interface PaperSimulationResult {
   rejectionReason?: string;
 }
 
+const INITIAL_NOW = Date.now();
+
 export const INITIAL_PORTFOLIO_STATE: PortfolioState = {
   cash: 100000, initialCapital: 100000, equity: 100000, totalUnrealizedPnL: 0, totalRealizedPnL: 0,
-  dailyPnL: 0, dailyPnLPct: 0, peakEquity: 100000, currentDrawdownPct: 0, marginUsed: 0,
-  availableMargin: 100000, positionsCount: 0, portfolioExposurePct: 0, positions: [], lastUpdated: Date.now(),
+  dailyPnL: 0, dailyPnLPct: 0, dayStartEquity: 100000, dayStartTimestamp: INITIAL_NOW, peakEquity: 100000, currentDrawdownPct: 0, marginUsed: 0,
+  availableMargin: 100000, positionsCount: 0, portfolioExposurePct: 0, positions: [], lastUpdated: INITIAL_NOW,
 };
+
+function isSameLocalCalendarDay(a: number, b: number): boolean {
+  const first = new Date(a);
+  const second = new Date(b);
+  return first.getFullYear() === second.getFullYear()
+    && first.getMonth() === second.getMonth()
+    && first.getDate() === second.getDate();
+}
 
 export function executePaperOrder(order: OrderRequest, currentPortfolio: PortfolioState, marketSnapshot: MarketDataSnapshot, options?: { simulatedLatencyMs?: number; customSlippageBps?: number }): PaperSimulationResult {
   if (order.executionMode === 'LIVE_BLOCKED') return reject(order, currentPortfolio, 'Direct Live Execution is strictly blocked by platform governance.');
   if (!Number.isFinite(order.quantity) || order.quantity <= 0) return reject(order, currentPortfolio, 'Order quantity must be a positive finite number.');
   if (marketSnapshot.bid <= 0 || marketSnapshot.ask <= 0 || marketSnapshot.ask < marketSnapshot.bid) return reject(order, currentPortfolio, 'Invalid market bid/ask data.');
+
+  const now = Date.now();
+  const sameTradingDay = Number.isFinite(currentPortfolio.dayStartTimestamp) && isSameLocalCalendarDay(currentPortfolio.dayStartTimestamp, now);
+  const dayStartEquity = sameTradingDay && Number.isFinite(currentPortfolio.dayStartEquity) ? currentPortfolio.dayStartEquity : currentPortfolio.equity;
+  const dayStartTimestamp = sameTradingDay ? currentPortfolio.dayStartTimestamp : now;
 
   const positionIndex = currentPortfolio.positions.findIndex(p => p.symbol === order.symbol);
   const existing = positionIndex >= 0 ? currentPortfolio.positions[positionIndex] : undefined;
@@ -60,9 +75,9 @@ export function executePaperOrder(order: OrderRequest, currentPortfolio: Portfol
   if (order.side === 'BUY' && currentPortfolio.cash < value + totalCharges) return reject(order, currentPortfolio, `Insufficient paper cash ($${currentPortfolio.cash.toFixed(2)} available, need $${(value + totalCharges).toFixed(2)}).`);
 
   const fill: OrderFill = {
-    fillId: `FILL-PAPER-${Date.now().toString(36).toUpperCase()}`, orderId: order.id, symbol: order.symbol, side: order.side,
+    fillId: `FILL-PAPER-${now.toString(36).toUpperCase()}`, orderId: order.id, symbol: order.symbol, side: order.side,
     quantity: order.quantity, price: fillPrice, slippageIncurredBps: slippageBps, slippageBps, brokerFee, brokerageFee: brokerFee,
-    exchangeFee, taxesApplicable, totalCharges, timestamp: Date.now(), brokerOrderId: `MOCK-BRK-${Math.floor(Math.random() * 899999 + 100000)}`,
+    exchangeFee, taxesApplicable, totalCharges, timestamp: now, brokerOrderId: `MOCK-BRK-${Math.floor(Math.random() * 899999 + 100000)}`,
   };
 
   const positions: Position[] = currentPortfolio.positions.map(p => ({ ...p }));
@@ -80,7 +95,7 @@ export function executePaperOrder(order: OrderRequest, currentPortfolio: Portfol
     } else {
       positions.push({ symbol: order.symbol, quantity: order.quantity, averageEntryPrice: fillPrice, currentPrice: marketSnapshot.lastPrice,
         marketValue: 0, unrealizedPnL: 0, unrealizedPnLPct: 0, realizedPnL: 0, stopLossPrice: order.stopLossPrice,
-        takeProfitPrice: order.takeProfitPrice, notionalExposurePct: 0, highestPriceSinceEntry: fillPrice, openedAt: Date.now() });
+        takeProfitPrice: order.takeProfitPrice, notionalExposurePct: 0, highestPriceSinceEntry: fillPrice, openedAt: now });
     }
   } else if (existing) {
     cashDelta = value - totalCharges;
@@ -104,8 +119,8 @@ export function executePaperOrder(order: OrderRequest, currentPortfolio: Portfol
   const equity = Math.round((cash + marketValue) * 100) / 100;
   const peak = Math.max(currentPortfolio.peakEquity, equity);
   const drawdown = peak > 0 ? Math.round(((peak - equity) / peak) * 10000) / 100 : 0;
-  const dailyPnL = equity - currentPortfolio.initialCapital;
-  const dailyPnLPct = currentPortfolio.initialCapital > 0 ? Math.round((dailyPnL / currentPortfolio.initialCapital) * 10000) / 100 : 0;
+  const dailyPnL = Math.round((equity - dayStartEquity) * 100) / 100;
+  const dailyPnLPct = dayStartEquity > 0 ? Math.round((dailyPnL / dayStartEquity) * 10000) / 100 : 0;
   const exposure = equity > 0 ? Math.round((marketValue / equity) * 1000) / 10 : 0;
   for (const p of positions) p.notionalExposurePct = equity > 0 ? Math.round((p.marketValue / equity) * 1000) / 10 : 0;
 
@@ -113,9 +128,9 @@ export function executePaperOrder(order: OrderRequest, currentPortfolio: Portfol
     cash: Math.round(cash * 100) / 100, initialCapital: currentPortfolio.initialCapital, equity,
     totalUnrealizedPnL: Math.round(unrealized * 100) / 100,
     totalRealizedPnL: Math.round((currentPortfolio.totalRealizedPnL + realizedDelta) * 100) / 100,
-    dailyPnL: Math.round(dailyPnL * 100) / 100, dailyPnLPct, peakEquity: peak, currentDrawdownPct: drawdown,
+    dailyPnL, dailyPnLPct, dayStartEquity, dayStartTimestamp, peakEquity: peak, currentDrawdownPct: drawdown,
     marginUsed: Math.round(marketValue * 0.25 * 100) / 100, availableMargin: Math.round((cash + marketValue * 0.75) * 100) / 100,
-    positionsCount: positions.length, portfolioExposurePct: exposure, positions, lastUpdated: Date.now(),
+    positionsCount: positions.length, portfolioExposurePct: exposure, positions, lastUpdated: now,
   };
   return { order, fill, updatedPortfolio, slippageIncurredBps: slippageBps, totalCharges, status: 'FILLED' };
 }
