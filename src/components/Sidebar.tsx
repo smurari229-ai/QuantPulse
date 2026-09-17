@@ -69,7 +69,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       items: [
         {
           id: 'risk' as NavViewId,
-          label: 'Risk Monitor (15 Gates)',
+          label: 'Risk Monitor (17 Gates)',
           icon: ShieldCheck,
           badge: failedRiskChecksCount > 0 ? `${failedRiskChecksCount} VIOLATIONS` : 'SHIELD OK',
           badgeColor: failedRiskChecksCount > 0 ? 'bg-rose-900 text-rose-300' : 'bg-emerald-950 text-emerald-400',
