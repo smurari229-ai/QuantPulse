@@ -64,7 +64,7 @@ export const AuditLogsView: React.FC = () => {
         </div>
         <div className="flex items-center space-x-1.5">
           <span className="text-slate-500 text-[11px]">Module:</span>
-          {['ALL', 'SYSTEM', 'RISK_ENGINE', 'AI_DECISION', 'ORDER_EXEC', 'KILL_SWITCH'].map((mod) => (
+          {['ALL', 'MARKET_DATA', 'AI_ENGINE', 'STRATEGY', 'RISK_ENGINE', 'PAPER_BROKER', 'KILL_SWITCH', 'SECURITY'].map((mod) => (
             <button key={mod} onClick={() => setFilterModule(mod)} className={`px-2 py-0.5 rounded text-[10px] ${filterModule === mod ? 'bg-blue-600 text-white font-bold' : 'bg-slate-800 text-slate-400 hover:text-slate-200'}`}>{mod}</button>
           ))}
         </div>
