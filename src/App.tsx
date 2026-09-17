@@ -64,7 +64,7 @@ export default function App() {
     const dummyOrder: OrderRequest = { id: `KILL-AUD-${Date.now()}`, orderId: `KILL-AUD-${Date.now()}`, clientOrderId: `CLI-KILL-${Date.now()}`, symbol: selectedSymbol, side: 'BUY', type: 'MARKET', quantity: 1, limitPrice: marketSnapshot.lastPrice, stopLossPrice: marketSnapshot.lastPrice * 0.96, takeProfitPrice: marketSnapshot.lastPrice * 1.08, executionMode: 'PAPER', timestamp: Date.now() };
     setCurrentVerdict(evaluateRiskGates(dummyOrder, portfolio, marketSnapshot, { isEmergencyKillSwitchActive: true }, DEFAULT_RISK_CONFIG));
   };
-  const failedRiskChecksCount = currentVerdict.checks.filter(c => c.status === 'FAILED').length;
+  const failedRiskChecksCount = currentVerdict.checks.filter(c => !c.passed).length;
 
   return <div id="quantpulse-platform-root" className="min-h-screen bg-slate-950 text-slate-100 flex flex-col antialiased selection:bg-blue-600 selection:text-white">
     <Header executionMode={executionMode} killSwitchState={killSwitchState} onTriggerKillSwitch={handleHeaderKillSwitch} dailyPnL={portfolio.dailyPnL} equity={portfolio.equity} isStaleData={marketSnapshot.dataQuality.isStale} activeView={activeView} />
