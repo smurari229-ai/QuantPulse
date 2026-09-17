@@ -66,7 +66,9 @@ export function evaluateRiskGates(
   const notional = order.quantity * referencePrice;
   const positionPct = portfolio.equity > 0 ? (notional / portfolio.equity) * 100 : 100;
   const currentInvested = portfolio.positions.reduce((sum, p) => sum + p.marketValue, 0);
-  const projectedExposurePct = portfolio.equity > 0 ? ((currentInvested + notional) / portfolio.equity) * 100 : 100;
+  const exposureDelta = order.side === 'SELL' ? -notional : notional;
+  const projectedInvested = Math.max(0, currentInvested + exposureDelta);
+  const projectedExposurePct = portfolio.equity > 0 ? (projectedInvested / portfolio.equity) * 100 : 100;
 
   const validQuantity = Number.isFinite(order.quantity) && order.quantity > 0;
   const validReferencePrice = Number.isFinite(referencePrice) && referencePrice > 0;
