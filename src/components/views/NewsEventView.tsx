@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { VERIFIED_NEWS_FEED, NewsEventItem } from '../../engines/newsEventEngine';
-import { Newspaper, ExternalLink, Calendar, CheckCircle2, TrendingUp, TrendingDown, Minus } from 'lucide-react';
+import { Newspaper, ExternalLink, Calendar, CheckCircle2, TrendingUp, TrendingDown, Minus, AlertTriangle } from 'lucide-react';
 
 export const NewsEventView: React.FC = () => {
   const [filterCategory, setFilterCategory] = useState<string>('ALL');
@@ -42,10 +42,10 @@ export const NewsEventView: React.FC = () => {
         <div>
           <div className="flex items-center space-x-2">
             <Newspaper className="w-5 h-5 text-blue-400" />
-            <h2 className="text-sm font-semibold text-slate-100">Verified Financial News & Macro Event Stream</h2>
+            <h2 className="text-sm font-semibold text-slate-100">Illustrative Financial News & Macro Event Stream</h2>
           </div>
           <p className="text-xs text-slate-400 mt-1">
-            Timestamped macroeconomic and corporate events verified by official regulatory and exchange press archives.
+            Demo/synthetic event data for UI and risk-pipeline testing. It is not a live or independently verified news feed and must not be used as a current-market source.
           </p>
         </div>
 
@@ -65,6 +65,11 @@ export const NewsEventView: React.FC = () => {
             </button>
           ))}
         </div>
+      </div>
+
+      <div className="bg-amber-950/30 border border-amber-500/40 rounded-lg p-3 flex items-start space-x-2 text-[11px] text-amber-200 font-mono">
+        <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+        <span>Data provenance status: SIMULATION ONLY. The displayed headlines, timestamps, sentiment scores, and source references are illustrative fixtures until a live provider with independent verification is integrated.</span>
       </div>
 
       {/* Feed List */}
@@ -101,7 +106,7 @@ export const NewsEventView: React.FC = () => {
             <div className="pt-2 border-t border-slate-800/80 flex justify-between items-center text-[11px] font-mono text-slate-400">
               <div className="flex items-center space-x-1.5">
                 <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-                <span>Verified Source: <strong className="text-slate-300">{item.source}</strong></span>
+                <span>Illustrative Source Reference: <strong className="text-slate-300">{item.source}</strong></span>
               </div>
               <a
                 href={item.sourceUrlVerification}
@@ -109,7 +114,7 @@ export const NewsEventView: React.FC = () => {
                 rel="noreferrer noopener"
                 className="flex items-center space-x-1 text-blue-400 hover:text-blue-300 hover:underline"
               >
-                <span>Audit Origin</span>
+                <span>Reference URL</span>
                 <ExternalLink className="w-3 h-3" />
               </a>
             </div>
