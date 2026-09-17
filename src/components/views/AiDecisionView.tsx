@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { AIDecisionOutput } from '../../types/ai';
 import { TechnicalIndicators } from '../../types/strategy';
+import { MarketDataSnapshot } from '../../types/market';
 import { generateAIDecision } from '../../engines/aiDecisionEngine';
 import { getNewsSentimentForSymbol } from '../../engines/newsEventEngine';
 import { Cpu, AlertTriangle, CheckCircle2, Shield, Code, RefreshCw } from 'lucide-react';
@@ -10,6 +11,7 @@ interface AiDecisionViewProps {
   indicators: TechnicalIndicators;
   currentPrice: number;
   symbol: string;
+  marketSnapshot: MarketDataSnapshot;
   onRefreshDecision: (newDecision: AIDecisionOutput) => void;
 }
 
@@ -18,6 +20,7 @@ export const AiDecisionView: React.FC<AiDecisionViewProps> = ({
   indicators,
   currentPrice,
   symbol,
+  marketSnapshot,
   onRefreshDecision,
 }) => {
   const [showRawJson, setShowRawJson] = useState<boolean>(false);
@@ -26,19 +29,17 @@ export const AiDecisionView: React.FC<AiDecisionViewProps> = ({
   const handleReRun = () => {
     setIsEvaluating(true);
     setTimeout(() => {
-      const spreadBps = Number.isFinite(currentPrice) && currentPrice > 0
-        ? 0
+      const spreadBps = marketSnapshot.bid > 0 && marketSnapshot.ask >= marketSnapshot.bid
+        ? ((marketSnapshot.ask - marketSnapshot.bid) / marketSnapshot.bid) * 10000
         : Number.POSITIVE_INFINITY;
+      const dataStalenessMs = Math.max(0, Date.now() - marketSnapshot.timestamp);
       const updated = generateAIDecision({
         symbol,
         timestamp: Date.now(),
         currentPrice,
         indicators,
         newsSentiment: { score: getNewsSentimentForSymbol(symbol).avgSentiment },
-        currentMarketConditions: {
-          spreadBps,
-          dataStalenessMs: 0,
-        },
+        currentMarketConditions: { spreadBps, dataStalenessMs },
       });
       onRefreshDecision(updated);
       setIsEvaluating(false);
