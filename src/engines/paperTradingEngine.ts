@@ -29,7 +29,7 @@ export function executePaperOrder(order: OrderRequest, currentPortfolio: Portfol
 
   const slippageBps = options?.customSlippageBps ?? (order.side === 'BUY' ? 4.5 : 5);
   const factor = 1 + slippageBps / 10000;
-  const rawPrice = order.estimatedPrice || (order.side === 'BUY' ? marketSnapshot.ask : marketSnapshot.bid);
+  const rawPrice = order.estimatedPrice ?? (order.side === 'BUY' ? marketSnapshot.ask : marketSnapshot.bid);
   if (!Number.isFinite(rawPrice) || rawPrice <= 0) return reject(order, currentPortfolio, 'Invalid execution price.');
   const fillPrice = order.side === 'BUY' ? Math.round(rawPrice * factor * 100) / 100 : Math.round((rawPrice / factor) * 100) / 100;
   const value = fillPrice * order.quantity;
