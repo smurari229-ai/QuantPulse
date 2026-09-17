@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { AIDecisionOutput } from '../../types/ai';
 import { TechnicalIndicators } from '../../types/strategy';
 import { generateAIDecision } from '../../engines/aiDecisionEngine';
+import { getNewsSentimentForSymbol } from '../../engines/newsEventEngine';
 import { Cpu, AlertTriangle, CheckCircle2, Shield, Code, RefreshCw } from 'lucide-react';
 
 interface AiDecisionViewProps {
@@ -25,14 +26,18 @@ export const AiDecisionView: React.FC<AiDecisionViewProps> = ({
   const handleReRun = () => {
     setIsEvaluating(true);
     setTimeout(() => {
+      const spreadBps = Number.isFinite(currentPrice) && currentPrice > 0
+        ? 0
+        : Number.POSITIVE_INFINITY;
       const updated = generateAIDecision({
         symbol,
         timestamp: Date.now(),
         currentPrice,
         indicators,
+        newsSentiment: { score: getNewsSentimentForSymbol(symbol).avgSentiment },
         currentMarketConditions: {
-          spreadBps: 4.2,
-          dataStalenessMs: 45,
+          spreadBps,
+          dataStalenessMs: 0,
         },
       });
       onRefreshDecision(updated);
@@ -100,7 +105,7 @@ export const AiDecisionView: React.FC<AiDecisionViewProps> = ({
               className="flex items-center space-x-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-800 text-white rounded text-xs font-semibold transition-colors"
             >
               <RefreshCw className={`w-3.5 h-3.5 ${isEvaluating ? 'animate-spin' : ''}`} />
-              <span>{isEvaluating ? 'Evaluating...' : 'Re-Run AI Inference'}</span>
+              <span>{isEvaluating ? 'Evaluating...' : 'Re-Run Heuristic Evaluation'}</span>
             </button>
           </div>
         </div>
@@ -141,7 +146,6 @@ export const AiDecisionView: React.FC<AiDecisionViewProps> = ({
 
           {/* Risk Flags & Required Checks */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* Risk Flags */}
             <div className="p-4 bg-slate-950/40 rounded-lg border border-slate-800 space-y-2">
               <div className="flex items-center space-x-1.5 text-xs font-mono font-bold text-rose-400">
                 <AlertTriangle className="w-4 h-4" />
@@ -161,7 +165,6 @@ export const AiDecisionView: React.FC<AiDecisionViewProps> = ({
               )}
             </div>
 
-            {/* Mandatory Required Checks for Risk Engine */}
             <div className="p-4 bg-slate-950/40 rounded-lg border border-slate-800 space-y-2">
               <div className="flex items-center space-x-1.5 text-xs font-mono font-bold text-emerald-400">
                 <Shield className="w-4 h-4" />
@@ -178,7 +181,6 @@ export const AiDecisionView: React.FC<AiDecisionViewProps> = ({
             </div>
           </div>
 
-          {/* Raw JSON Schema Modal / Section */}
           {showRawJson && (
             <div className="space-y-2">
               <span className="text-xs font-mono text-slate-400 uppercase font-semibold">Strict JSON Schema Contract:</span>
