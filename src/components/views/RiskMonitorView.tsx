@@ -45,9 +45,10 @@ export const RiskMonitorView: React.FC<RiskMonitorViewProps> = ({
     onNewVerdict(verdict);
   };
 
-  const passCount = currentVerdict.checks.filter((c) => c.status === 'PASS').length;
-  const failCount = currentVerdict.checks.filter((c) => c.status === 'FAILED').length;
+  const passCount = currentVerdict.checks.filter((c) => c.passed).length;
+  const failCount = currentVerdict.checks.filter((c) => !c.passed).length;
   const cautionCount = currentVerdict.checks.filter((c) => c.status === 'CAUTION').length;
+  const totalGateCount = currentVerdict.checks.length;
 
   return (
     <div className="space-y-6">
@@ -78,7 +79,7 @@ export const RiskMonitorView: React.FC<RiskMonitorViewProps> = ({
         <div className="flex items-center space-x-4 text-xs">
           <div>
             <span className="text-slate-400">PASSED GATES: </span>
-            <span className="font-bold text-emerald-400">{passCount} / 15</span>
+            <span className="font-bold text-emerald-400">{passCount} / {totalGateCount}</span>
           </div>
           <div>
             <span className="text-slate-400">FAILED GATES: </span>
@@ -178,11 +179,11 @@ export const RiskMonitorView: React.FC<RiskMonitorViewProps> = ({
         </div>
       </div>
 
-      {/* Complete 15 Risk Gates Table */}
+      {/* Complete risk gate table */}
       <div className="bg-slate-900 border border-slate-800 rounded-lg overflow-hidden">
         <div className="px-4 py-3 bg-slate-950/40 border-b border-slate-800 flex justify-between items-center text-xs font-mono">
           <div className="flex items-center space-x-2">
-            <h3 className="font-bold text-slate-200">The 15 Mandatory Pre-Trade Risk Gates</h3>
+            <h3 className="font-bold text-slate-200">The {totalGateCount} Mandatory Pre-Trade Risk Gates</h3>
             <span className="text-[10px] bg-slate-800 text-slate-400 px-2 py-0.5 rounded">
               Standard Institutional Hard-Stops
             </span>
@@ -204,7 +205,7 @@ export const RiskMonitorView: React.FC<RiskMonitorViewProps> = ({
             </thead>
             <tbody className="divide-y divide-slate-800/60 text-slate-300">
               {currentVerdict.checks.map((check, index) => {
-                const isPass = check.status === 'PASS';
+                const isPass = check.passed;
                 const isCaution = check.status === 'CAUTION';
                 return (
                   <tr key={check.gateId} className="hover:bg-slate-800/40 transition-colors">
