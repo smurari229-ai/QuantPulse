@@ -82,6 +82,27 @@ assert(!settingsDrivenVerdict.isApproved, 'saved risk boundary is enforced by ru
 assert(settingsDrivenVerdict.rejectionReasons.some(reason => reason.includes('Position size exceeds $1')), 'runtime verdict reflects saved notional boundary');
 Object.assign(DEFAULT_RISK_CONFIG, { maxPositionSizeNotional: originalMaxNotional });
 
+const exposurePrice = snapshot.lastPrice;
+const exposurePortfolio = {
+  ...INITIAL_PORTFOLIO_STATE,
+  positions: [{
+    symbol: 'NIFTY50', quantity: 65000 / exposurePrice, averageEntryPrice: exposurePrice, currentPrice: exposurePrice,
+    marketValue: 65000, unrealizedPnL: 0, unrealizedPnLPct: 0, realizedPnL: 0,
+    stopLossPrice: exposurePrice * 0.95, takeProfitPrice: exposurePrice * 1.05,
+    notionalExposurePct: 65, highestPriceSinceEntry: exposurePrice, openedAt: Date.now(),
+  }],
+  positionsCount: 1,
+  portfolioExposurePct: 65,
+};
+const reducingSell: OrderRequest = {
+  ...baseOrder, id: 'SMOKE-EXPOSURE-SELL', orderId: 'SMOKE-EXPOSURE-SELL', clientOrderId: 'SMOKE-EXPOSURE-CLI', side: 'SELL',
+  quantity: 10000 / exposurePrice, stopLossPrice: exposurePrice * 1.05, takeProfitPrice: exposurePrice * 0.90,
+};
+const reducingSellVerdict = evaluateRiskGates(reducingSell, exposurePortfolio, snapshot);
+const exposureGate = reducingSellVerdict.checks.find(c => c.checkName === 'MAX_PORTFOLIO_EXPOSURE');
+assert(exposureGate?.passed, 'selling an existing position reduces projected portfolio exposure instead of adding it');
+assert(String(exposureGate?.currentValue).startsWith('55.'), 'sell exposure projection reflects the 10% exposure reduction');
+
 const killState = triggerEmergencyKillSwitch('smoke-test');
 assert(/^\d{6}$/.test(killState.resetConfirmationCode), 'kill-switch reset code is a six-digit numeric authorization code');
 const killVerdict = evaluateRiskGates(baseOrder, INITIAL_PORTFOLIO_STATE, snapshot, { isEmergencyKillSwitchActive: killState.isEmergencyStopTripped });
@@ -111,6 +132,21 @@ const sellResult = executePaperOrder(sellOrder, buyResult.updatedPortfolio, snap
 assert(sellResult.status === 'FILLED' && sellResult.updatedPortfolio.positions.length === 0, 'paper SELL closes the held position');
 const invalidSell = executePaperOrder(sellOrder, INITIAL_PORTFOLIO_STATE, snapshot);
 assert(invalidSell.status === 'REJECTED', 'paper SELL without a position is rejected');
+
+const marketableLimitOrder: OrderRequest = {
+  ...baseOrder, id: 'SMOKE-LIMIT-01', orderId: 'SMOKE-LIMIT-01', clientOrderId: 'SMOKE-LIMIT-CLI-01', type: 'LIMIT',
+  limitPrice: snapshot.ask, stopLossPrice: snapshot.ask * 0.96, takeProfitPrice: snapshot.ask * 1.08,
+};
+const marketableLimit = executePaperOrder(marketableLimitOrder, INITIAL_PORTFOLIO_STATE, snapshot, { customSlippageBps: 0 });
+assert(marketableLimit.status === 'FILLED' && marketableLimit.fill?.price <= snapshot.ask, 'marketable limit BUY fills without exceeding its limit price');
+
+const nonMarketableLimitOrder: OrderRequest = { ...marketableLimitOrder, id: 'SMOKE-LIMIT-02', orderId: 'SMOKE-LIMIT-02', limitPrice: snapshot.bid * 0.99 };
+const nonMarketableLimit = executePaperOrder(nonMarketableLimitOrder, INITIAL_PORTFOLIO_STATE, snapshot, { customSlippageBps: 0 });
+assert(nonMarketableLimit.status === 'REJECTED' && nonMarketableLimit.rejectionReason?.includes('not marketable'), 'non-marketable limit BUY does not execute immediately');
+
+const unsupportedStopOrder: OrderRequest = { ...baseOrder, id: 'SMOKE-STOP-01', orderId: 'SMOKE-STOP-01', type: 'STOP_MARKET' };
+const unsupportedStop = executePaperOrder(unsupportedStopOrder, INITIAL_PORTFOLIO_STATE, snapshot);
+assert(unsupportedStop.status === 'REJECTED' && unsupportedStop.rejectionReason?.includes('STOP_MARKET'), 'unsupported stop-market order is rejected explicitly');
 
 const params: BacktestParameters = {
   strategyId: 'SMOKE_TREND', symbol: 'NIFTY50',
