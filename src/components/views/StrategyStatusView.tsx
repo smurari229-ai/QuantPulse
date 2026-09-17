@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { REGISTERED_STRATEGIES, evaluateStrategySignal } from '../../engines/strategyEngine';
 import { StrategyDefinition, StrategySignalOutput } from '../../types/strategy';
 import { OHLCV } from '../../types/market';
-import { Layers, ShieldAlert, ArrowRightCircle, Target, CheckCircle2, Sliders } from 'lucide-react';
+import { Layers, ShieldAlert, ArrowRightCircle, Target, CheckCircle2, Sliders, AlertTriangle } from 'lucide-react';
 
 interface StrategyStatusViewProps {
   symbol: string;
@@ -31,6 +31,11 @@ export const StrategyStatusView: React.FC<StrategyStatusViewProps> = ({ symbol, 
         <div className="text-xs font-mono text-slate-400">
           Target Instrument: <strong className="text-slate-200">${symbol}</strong>
         </div>
+      </div>
+
+      <div className="bg-amber-950/30 border border-amber-500/40 rounded-lg p-3 flex items-start space-x-2 text-[11px] text-amber-200 font-mono">
+        <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+        <span>Strategy signals are deterministic research outputs. They use simulated market data and a fixed demo target quantity; portfolio-aware position sizing and live execution are not enabled in this view.</span>
       </div>
 
       {/* Strategy Selectors */}
@@ -98,7 +103,7 @@ export const StrategyStatusView: React.FC<StrategyStatusViewProps> = ({ symbol, 
               <span>Suggested Entry Price</span>
             </div>
             <div className="text-base font-bold text-slate-100">${signalOutput.suggestedEntry.toFixed(2)}</div>
-            <div className="text-[10px] text-slate-500">Subject to live slippage check</div>
+            <div className="text-[10px] text-slate-500">Subject to simulated slippage and risk-gate checks</div>
           </div>
 
           <div className="p-3.5 bg-slate-950/40 rounded border border-slate-800 space-y-1.5">
@@ -166,7 +171,7 @@ export const StrategyStatusView: React.FC<StrategyStatusViewProps> = ({ symbol, 
                 {selectedStrategy.positionSizingMethod}
               </span>
               <p className="text-[11px] text-slate-400 mt-1">
-                Calculates lot size based on distance between entry and stop loss divided by maximum permitted dollar risk per trade.
+                Strategy metadata describes the intended sizing method. The current research signal output uses a fixed demo target quantity of 10 and does not calculate portfolio-aware sizing.
               </p>
             </div>
             <div>
