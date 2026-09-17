@@ -20,7 +20,7 @@ export const INITIAL_PORTFOLIO_STATE: PortfolioState = {
 export function executePaperOrder(order: OrderRequest, currentPortfolio: PortfolioState, marketSnapshot: MarketDataSnapshot, options?: { simulatedLatencyMs?: number; customSlippageBps?: number }): PaperSimulationResult {
   if (order.executionMode === 'LIVE_BLOCKED') return reject(order, currentPortfolio, 'Direct Live Execution is strictly blocked by platform governance.');
   if (!Number.isFinite(order.quantity) || order.quantity <= 0) return reject(order, currentPortfolio, 'Order quantity must be a positive finite number.');
-  if (marketSnapshot.bid <= 0 || marketSnapshot.ask <= 0) return reject(order, currentPortfolio, 'Invalid market bid/ask data.');
+  if (marketSnapshot.bid <= 0 || marketSnapshot.ask <= 0 || marketSnapshot.ask < marketSnapshot.bid) return reject(order, currentPortfolio, 'Invalid market bid/ask data.');
 
   const positionIndex = currentPortfolio.positions.findIndex(p => p.symbol === order.symbol);
   const existing = positionIndex >= 0 ? currentPortfolio.positions[positionIndex] : undefined;
@@ -28,8 +28,22 @@ export function executePaperOrder(order: OrderRequest, currentPortfolio: Portfol
   if (order.side === 'SELL' && existing && order.quantity > existing.quantity) return reject(order, currentPortfolio, `Cannot sell ${order.quantity} units: only ${existing.quantity} units are held.`);
 
   const slippageBps = options?.customSlippageBps ?? (order.side === 'BUY' ? 4.5 : 5);
+  if (!Number.isFinite(slippageBps) || slippageBps < 0) return reject(order, currentPortfolio, 'Slippage configuration must be a finite non-negative number.');
   const factor = 1 + slippageBps / 10000;
-  const rawPrice = order.estimatedPrice ?? (order.side === 'BUY' ? marketSnapshot.ask : marketSnapshot.bid);
+
+  let rawPrice: number;
+  if (order.type === 'LIMIT') {
+    const limitPrice = order.limitPrice;
+    if (!Number.isFinite(limitPrice) || limitPrice <= 0) return reject(order, currentPortfolio, 'Limit order requires a positive finite limit price.');
+    const marketable = order.side === 'BUY' ? marketSnapshot.ask <= limitPrice : marketSnapshot.bid >= limitPrice;
+    if (!marketable) return reject(order, currentPortfolio, `Limit order is not marketable at current quote (bid $${marketSnapshot.bid.toFixed(2)}, ask $${marketSnapshot.ask.toFixed(2)}, limit $${limitPrice.toFixed(2)}). Pending limit orders are not supported by this paper simulator.`);
+    rawPrice = order.side === 'BUY' ? marketSnapshot.ask : marketSnapshot.bid;
+  } else if (order.type === 'STOP_MARKET') {
+    return reject(order, currentPortfolio, 'STOP_MARKET orders are not supported by the current paper simulator because no separate trigger-price field is defined.');
+  } else {
+    rawPrice = order.estimatedPrice ?? (order.side === 'BUY' ? marketSnapshot.ask : marketSnapshot.bid);
+  }
+
   if (!Number.isFinite(rawPrice) || rawPrice <= 0) return reject(order, currentPortfolio, 'Invalid execution price.');
   const fillPrice = order.side === 'BUY' ? Math.round(rawPrice * factor * 100) / 100 : Math.round((rawPrice / factor) * 100) / 100;
   const value = fillPrice * order.quantity;
