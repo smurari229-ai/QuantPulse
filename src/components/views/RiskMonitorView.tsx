@@ -1,13 +1,14 @@
 import React, { useState } from 'react';
 import { RiskValidationVerdict, OrderRequest, PortfolioState } from '../../types/order';
 import { MarketDataSnapshot } from '../../types/market';
-import { evaluateRiskGates, DEFAULT_RISK_CONFIG } from '../../engines/riskEngine';
-import { ShieldCheck, ShieldAlert, AlertTriangle, CheckCircle2, XCircle, Sliders, Play, Key } from 'lucide-react';
+import { evaluateRiskGates, DEFAULT_RISK_CONFIG, RecentOrderContext } from '../../engines/riskEngine';
+import { ShieldCheck, ShieldAlert, AlertTriangle, CheckCircle2, XCircle, Sliders, Play } from 'lucide-react';
 
 interface RiskMonitorViewProps {
   currentVerdict: RiskValidationVerdict;
   portfolio: PortfolioState;
   marketSnapshot: MarketDataSnapshot;
+  riskContext: RecentOrderContext;
   onNewVerdict: (verdict: RiskValidationVerdict) => void;
 }
 
@@ -15,10 +16,12 @@ export const RiskMonitorView: React.FC<RiskMonitorViewProps> = ({
   currentVerdict,
   portfolio,
   marketSnapshot,
+  riskContext,
   onNewVerdict,
 }) => {
-  // Test Order state for interactive experimentation
-  const [testSymbol, setTestSymbol] = useState<string>(marketSnapshot.symbol);
+  // The tester evaluates the currently loaded market snapshot; it cannot safely
+  // evaluate an arbitrary symbol without fetching a matching market snapshot.
+  const testSymbol = marketSnapshot.symbol;
   const [testSide, setTestSide] = useState<'BUY' | 'SELL'>('BUY');
   const [testQty, setTestQty] = useState<number>(10);
   const [testStopLoss, setTestStopLoss] = useState<number>(Math.round(marketSnapshot.lastPrice * 0.96));
@@ -41,7 +44,7 @@ export const RiskMonitorView: React.FC<RiskMonitorViewProps> = ({
       aiDecisionId: 'AI-TEST-INTERACTIVE',
     };
 
-    const verdict = evaluateRiskGates(testOrder, portfolio, marketSnapshot, {}, DEFAULT_RISK_CONFIG);
+    const verdict = evaluateRiskGates(testOrder, portfolio, marketSnapshot, riskContext, DEFAULT_RISK_CONFIG);
     onNewVerdict(verdict);
   };
 
@@ -129,8 +132,9 @@ export const RiskMonitorView: React.FC<RiskMonitorViewProps> = ({
             <input
               type="text"
               value={testSymbol}
-              onChange={(e) => setTestSymbol(e.target.value.toUpperCase())}
-              className="w-full bg-slate-950 border border-slate-800 rounded px-2 py-1.5 text-slate-200 text-xs"
+              readOnly
+              aria-label="Current market symbol"
+              className="w-full bg-slate-950 border border-slate-800 rounded px-2 py-1.5 text-slate-200 text-xs opacity-80 cursor-not-allowed"
             />
           </div>
           <div>
