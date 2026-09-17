@@ -60,9 +60,11 @@ export function evaluateRiskGates(
   const checks: IndividualRiskCheckResult[] = [];
   const rejectionReasons: string[] = [];
 
-  // Use nullish coalescing so an explicit zero/invalid estimated price is not
-  // silently replaced by the market price and hidden from the sanity gate.
-  const referencePrice = order.estimatedPrice ?? marketSnapshot.lastPrice;
+  // Match risk sizing to the price the paper execution engine will actually use.
+  // Explicit estimated prices remain authoritative; LIMIT orders require their
+  // own limit price; market orders use the executable side of the quote.
+  const referencePrice = order.estimatedPrice
+    ?? (order.type === 'LIMIT' ? order.limitPrice ?? Number.NaN : order.side === 'BUY' ? marketSnapshot.ask : marketSnapshot.bid);
   const notional = order.quantity * referencePrice;
   const positionPct = portfolio.equity > 0 ? (notional / portfolio.equity) * 100 : 100;
   const currentInvested = portfolio.positions.reduce((sum, p) => sum + p.marketValue, 0);
