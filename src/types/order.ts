@@ -81,6 +81,8 @@ export interface PortfolioState {
   totalRealizedPnL: number;
   dailyPnL: number;
   dailyPnLPct: number;
+  dayStartEquity: number;
+  dayStartTimestamp: number;
   peakEquity: number;
   currentDrawdownPct: number;
   marginUsed: number;
