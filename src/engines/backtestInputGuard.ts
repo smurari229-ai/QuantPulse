@@ -18,11 +18,13 @@ export function runDateScopedBacktest(
     );
   }
 
-  const start = parseDateBoundary(params.startDate, false);
-  const endExclusive = parseDateBoundary(params.endDate, true);
-  if (start === null || endExclusive === null) {
+  const start = parseDateBoundary(params.startDate);
+  const endStart = parseDateBoundary(params.endDate);
+  if (start === null || endStart === null) {
     throw new Error('Backtest startDate and endDate must use YYYY-MM-DD format.');
   }
+
+  const endExclusive = endStart + 24 * 60 * 60 * 1000;
   if (start >= endExclusive) {
     throw new Error('Backtest startDate must be before endDate.');
   }
@@ -38,16 +40,16 @@ export function runDateScopedBacktest(
   return runFullBacktest(scopedBars, params);
 }
 
-function parseDateBoundary(value: string, endOfDay: boolean): number | null {
+function parseDateBoundary(value: string): number | null {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
   const [year, month, day] = value.split('-').map(Number);
-  const timestamp = Date.UTC(year, month - 1, day + (endOfDay ? 1 : 0));
+  const timestamp = Date.UTC(year, month - 1, day);
   const date = new Date(timestamp);
 
   if (
     date.getUTCFullYear() !== year ||
     date.getUTCMonth() !== month - 1 ||
-    date.getUTCDate() !== day + (endOfDay ? 1 : 0)
+    date.getUTCDate() !== day
   ) {
     return null;
   }
