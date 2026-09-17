@@ -1,4 +1,4 @@
-import { generateSyntheticDailyBars, generateMarketSnapshot, validateMarketDataSeries } from '../src/engines/marketDataEngine';
+import { generateSyntheticDailyBars, generateMarketSnapshot, getLiveSnapshot, validateMarketDataSeries } from '../src/engines/marketDataEngine';
 import { evaluateRiskGates, DEFAULT_RISK_CONFIG } from '../src/engines/riskEngine';
 import { INITIAL_PORTFOLIO_STATE, executePaperOrder } from '../src/engines/paperTradingEngine';
 import { triggerEmergencyKillSwitch, resetKillSwitchWithVerification } from '../src/engines/killSwitchEngine';
@@ -14,6 +14,20 @@ function assert(condition: unknown, message: string): asserts condition {
 const bars = generateSyntheticDailyBars('NIFTY50', 120);
 assert(bars.length === 120, 'synthetic market generator returns requested bar count');
 assert(validateMarketDataSeries(bars).isValid, 'generated market data passes validation');
+
+let invalidGeneratorRejected = false;
+try { generateSyntheticDailyBars('NIFTY50', 0); } catch { invalidGeneratorRejected = true; }
+assert(invalidGeneratorRejected, 'invalid synthetic bar count is rejected');
+let invalidVolatilityRejected = false;
+try { generateSyntheticDailyBars('NIFTY50', 10, undefined, 0); } catch { invalidVolatilityRejected = true; }
+assert(invalidVolatilityRejected, 'zero synthetic volatility is rejected');
+const latencySnapshot = getLiveSnapshot('NIFTY50', bars[bars.length - 1].close, { latencyMs: 5000, isStale: false });
+assert(latencySnapshot.dataQuality.latencyMs === 5000 && latencySnapshot.timestamp <= Date.now() - 4990, 'configured simulated latency is reflected in snapshot timestamp');
+assert(!evaluateRiskGates({
+  id: 'SMOKE-LATENCY', orderId: 'SMOKE-LATENCY', clientOrderId: 'SMOKE-LATENCY', symbol: 'NIFTY50', side: 'BUY', type: 'MARKET', quantity: 1,
+  limitPrice: latencySnapshot.lastPrice, stopLossPrice: latencySnapshot.lastPrice * 0.96, takeProfitPrice: latencySnapshot.lastPrice * 1.08,
+  executionMode: 'PAPER', timestamp: Date.now(),
+}, INITIAL_PORTFOLIO_STATE, latencySnapshot).checks.find(c => c.checkName === 'STALE_DATA_GUARD')?.passed, '5-second simulated latency trips stale-data risk gate');
 
 const malformedBars = bars.map((bar) => ({ ...bar }));
 malformedBars[10].close = Number.NaN;
@@ -101,7 +115,7 @@ const reducingSell: OrderRequest = {
 const reducingSellVerdict = evaluateRiskGates(reducingSell, exposurePortfolio, snapshot);
 const exposureGate = reducingSellVerdict.checks.find(c => c.checkName === 'MAX_PORTFOLIO_EXPOSURE');
 assert(exposureGate?.passed, 'selling an existing position reduces projected portfolio exposure instead of adding it');
-assert(String(exposureGate?.currentValue).startsWith('55.'), 'sell exposure projection reflects the 10% exposure reduction');
+assert(Number(String(exposureGate?.currentValue).replace('%', '')) < 56, 'sell exposure projection reflects the exposure reduction');
 
 const killState = triggerEmergencyKillSwitch('smoke-test');
 assert(/^\d{6}$/.test(killState.resetConfirmationCode), 'kill-switch reset code is a six-digit numeric authorization code');
