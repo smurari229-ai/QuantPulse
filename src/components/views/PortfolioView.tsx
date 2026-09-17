@@ -1,5 +1,6 @@
 import React from 'react';
 import { PortfolioState } from '../../types/order';
+import { DEFAULT_RISK_CONFIG } from '../../engines/riskEngine';
 import { ShieldCheck, TrendingUp, TrendingDown, DollarSign, PieChart as PieIcon, AlertCircle } from 'lucide-react';
 
 interface PortfolioViewProps {
@@ -8,6 +9,8 @@ interface PortfolioViewProps {
 
 export const PortfolioView: React.FC<PortfolioViewProps> = ({ portfolio }) => {
   const isPositiveDay = portfolio.dailyPnL >= 0;
+  const maxExposure = DEFAULT_RISK_CONFIG.maxPortfolioExposurePct;
+  const exposureProgressPct = maxExposure > 0 ? Math.min(100, (portfolio.portfolioExposurePct / maxExposure) * 100) : 100;
 
   return (
     <div className="space-y-6">
@@ -42,7 +45,7 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({ portfolio }) => {
             {portfolio.dailyPnLPct.toFixed(2)}%)
           </div>
           <div className="text-[11px] text-slate-400 mt-1">
-            Circuit breaker threshold: -3.00%
+            Circuit breaker threshold: -{DEFAULT_RISK_CONFIG.maxDailyLossPct.toFixed(2)}%
           </div>
         </div>
 
@@ -68,7 +71,7 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({ portfolio }) => {
             {portfolio.portfolioExposurePct.toFixed(1)}%
           </div>
           <div className="text-[11px] text-slate-400 mt-1">
-            Exposure Limit: 70.0% Max ({portfolio.positionsCount} active positions)
+            Exposure Limit: {maxExposure.toFixed(1)}% Max ({portfolio.positionsCount} active positions)
           </div>
         </div>
       </div>
@@ -78,19 +81,19 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({ portfolio }) => {
         <div className="flex justify-between items-center text-xs font-mono text-slate-400 mb-2">
           <span>AGGREGATE RISK EXPOSURE</span>
           <span className="font-semibold text-slate-200">
-            {portfolio.portfolioExposurePct.toFixed(1)}% / 70.0% Max Allowed
+            {portfolio.portfolioExposurePct.toFixed(1)}% / {maxExposure.toFixed(1)}% Max Allowed
           </span>
         </div>
         <div className="w-full bg-slate-800 rounded-full h-2.5 overflow-hidden">
           <div
             className={`h-2.5 rounded-full transition-all duration-500 ${
-              portfolio.portfolioExposurePct > 60
+              portfolio.portfolioExposurePct > maxExposure * 0.86
                 ? 'bg-rose-500'
-                : portfolio.portfolioExposurePct > 40
+                : portfolio.portfolioExposurePct > maxExposure * 0.57
                 ? 'bg-amber-500'
                 : 'bg-blue-500'
             }`}
-            style={{ width: `${Math.min(100, (portfolio.portfolioExposurePct / 70) * 100)}%` }}
+            style={{ width: `${exposureProgressPct}%` }}
           />
         </div>
       </div>
