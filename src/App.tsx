@@ -21,7 +21,7 @@ import { SettingsView } from './components/views/SettingsView';
 import { generateSyntheticDailyBars, generateMarketSnapshot, validateMarketDataSeries } from './engines/marketDataEngine';
 import { computeAllIndicators } from './engines/marketAnalysisEngine';
 import { generateAIDecision } from './engines/aiDecisionEngine';
-import { evaluateRiskGates, DEFAULT_RISK_CONFIG } from './engines/riskEngine';
+import { evaluateRiskGates, DEFAULT_RISK_CONFIG, RecentOrderContext } from './engines/riskEngine';
 import { INITIAL_PORTFOLIO_STATE } from './engines/paperTradingEngine';
 import { getKillSwitchState, triggerEmergencyKillSwitch, KillSwitchState } from './engines/killSwitchEngine';
 import { OrderRequest, PortfolioState, RiskValidationVerdict, SystemExecutionMode } from './types/order';
@@ -40,6 +40,39 @@ export default function App() {
   const killActive = killSwitchState.isGlobalTradingOff || killSwitchState.isEmergencyStopTripped || killSwitchState.isDailyLossLockTripped || killSwitchState.isApiFailureLockTripped || killSwitchState.isDataStaleLockTripped || killSwitchState.isAbnormalFrequencyLockTripped;
   const [aiDecision, setAiDecision] = useState(() => generateAIDecision({ symbol: selectedSymbol, timestamp: Date.now(), currentPrice: marketSnapshot.lastPrice, indicators, currentMarketConditions: { spreadBps: 4.2, dataStalenessMs: marketSnapshot.dataQuality.latencyMs } }));
 
+  const riskContext = useMemo<RecentOrderContext>(() => {
+    const today = new Date();
+    const todayKey = `${today.getFullYear()}-${today.getMonth()}-${today.getDate()}`;
+    const lastOrderTimestamps: Record<string, number> = {};
+    const recentOrders = orders.map((order) => ({
+      id: order.id,
+      symbol: order.symbol,
+      side: order.side,
+      quantity: order.quantity,
+      timestamp: order.timestamp ?? order.createdAt ?? 0,
+    }));
+
+    for (const order of recentOrders) {
+      if (order.timestamp <= 0) continue;
+      const previous = lastOrderTimestamps[order.symbol] ?? 0;
+      if (order.timestamp > previous) lastOrderTimestamps[order.symbol] = order.timestamp;
+    }
+
+    const todayExecutedTradesCount = recentOrders.filter((order) => {
+      if (order.timestamp <= 0) return false;
+      const date = new Date(order.timestamp);
+      return `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}` === todayKey;
+    }).length;
+
+    return {
+      lastOrderTimestamps,
+      recentOrders,
+      todayExecutedTradesCount,
+      brokerHeartbeatActive: true,
+      isEmergencyKillSwitchActive: killActive,
+    };
+  }, [orders, killActive]);
+
   const [currentVerdict, setCurrentVerdict] = useState<RiskValidationVerdict>(() => {
     const dummyOrder: OrderRequest = { id: 'INIT-AUDIT-01', orderId: 'INIT-AUDIT-01', clientOrderId: 'CLI-INIT-01', symbol: selectedSymbol, side: 'BUY', type: 'MARKET', quantity: 10, limitPrice: marketSnapshot.lastPrice, stopLossPrice: Math.round(marketSnapshot.lastPrice * 0.96), takeProfitPrice: Math.round(marketSnapshot.lastPrice * 1.08), executionMode: 'PAPER', timestamp: Date.now() };
     return evaluateRiskGates(dummyOrder, INITIAL_PORTFOLIO_STATE, marketSnapshot, { isEmergencyKillSwitchActive: killActive }, DEFAULT_RISK_CONFIG);
@@ -54,15 +87,15 @@ export default function App() {
     const newIndicators = computeAllIndicators(newBars);
     setAiDecision(generateAIDecision({ symbol: newSymbol, timestamp: Date.now(), currentPrice: newSnap.lastPrice, indicators: newIndicators, currentMarketConditions: { spreadBps: 4.5, dataStalenessMs: newSnap.dataQuality.latencyMs } }));
     const dummyOrder: OrderRequest = { id: `AUD-${Date.now().toString().slice(-4)}`, orderId: `AUD-${Date.now().toString().slice(-4)}`, clientOrderId: `CLI-${Date.now()}`, symbol: newSymbol, side: 'BUY', type: 'MARKET', quantity: 10, limitPrice: newSnap.lastPrice, stopLossPrice: Math.round(newSnap.lastPrice * 0.96), takeProfitPrice: Math.round(newSnap.lastPrice * 1.08), executionMode: 'PAPER', timestamp: Date.now() };
-    setCurrentVerdict(evaluateRiskGates(dummyOrder, portfolio, newSnap, { isEmergencyKillSwitchActive: killActive }, DEFAULT_RISK_CONFIG));
-  }, [portfolio, killActive]);
+    setCurrentVerdict(evaluateRiskGates(dummyOrder, portfolio, newSnap, { ...riskContext, isEmergencyKillSwitchActive: killActive }, DEFAULT_RISK_CONFIG));
+  }, [portfolio, killActive, riskContext]);
 
   const handleOrderExecuted = (newPortfolio: PortfolioState, executedOrder: OrderRequest) => { setPortfolio(newPortfolio); setOrders(prev => [executedOrder, ...prev]); };
   const handleHeaderKillSwitch = () => {
     const tripped = triggerEmergencyKillSwitch(killSwitchState, 'Header emergency kill switch pressed');
     setKillSwitchState(tripped);
     const dummyOrder: OrderRequest = { id: `KILL-AUD-${Date.now()}`, orderId: `KILL-AUD-${Date.now()}`, clientOrderId: `CLI-KILL-${Date.now()}`, symbol: selectedSymbol, side: 'BUY', type: 'MARKET', quantity: 1, limitPrice: marketSnapshot.lastPrice, stopLossPrice: marketSnapshot.lastPrice * 0.96, takeProfitPrice: marketSnapshot.lastPrice * 1.08, executionMode: 'PAPER', timestamp: Date.now() };
-    setCurrentVerdict(evaluateRiskGates(dummyOrder, portfolio, marketSnapshot, { isEmergencyKillSwitchActive: true }, DEFAULT_RISK_CONFIG));
+    setCurrentVerdict(evaluateRiskGates(dummyOrder, portfolio, marketSnapshot, { ...riskContext, isEmergencyKillSwitchActive: true }, DEFAULT_RISK_CONFIG));
   };
   const failedRiskChecksCount = currentVerdict.checks.filter(c => !c.passed).length;
 
@@ -77,9 +110,9 @@ export default function App() {
         {activeView === 'ai' && <AiDecisionView decision={aiDecision} indicators={indicators} currentPrice={marketSnapshot.lastPrice} symbol={selectedSymbol} onRefreshDecision={setAiDecision} />}
         {activeView === 'strategy' && <StrategyStatusView symbol={selectedSymbol} bars={bars} />}
         {activeView === 'backtest' && <BacktestingLabView bars={bars} symbol={selectedSymbol} />}
-        {activeView === 'paper' && <PaperTradingView portfolio={portfolio} marketSnapshot={marketSnapshot} isEmergencyKillSwitchActive={killActive} onOrderExecuted={handleOrderExecuted} onRiskVerdictGenerated={setCurrentVerdict} />}
+        {activeView === 'paper' && <PaperTradingView portfolio={portfolio} marketSnapshot={marketSnapshot} isEmergencyKillSwitchActive={killActive} riskContext={riskContext} onOrderExecuted={handleOrderExecuted} onRiskVerdictGenerated={setCurrentVerdict} />}
         {activeView === 'orders' && <OrdersHistoryView orders={orders} />}
-        {activeView === 'risk' && <RiskMonitorView currentVerdict={currentVerdict} portfolio={portfolio} marketSnapshot={marketSnapshot} onNewVerdict={setCurrentVerdict} />}
+        {activeView === 'risk' && <RiskMonitorView currentVerdict={currentVerdict} portfolio={portfolio} marketSnapshot={marketSnapshot} riskContext={riskContext} onNewVerdict={setCurrentVerdict} />}
         {activeView === 'audit' && <AuditLogsView />}
         {activeView === 'killswitch' && <KillSwitchSafetyView killSwitchState={killSwitchState} portfolio={portfolio} onKillSwitchChanged={setKillSwitchState} />}
         {activeView === 'failure_sim' && <FailureSimulatorView portfolio={portfolio} marketSnapshot={marketSnapshot} onUpdateSnapshot={setMarketSnapshot} onUpdateKillSwitch={setKillSwitchState} onRiskVerdictGenerated={setCurrentVerdict} />}
