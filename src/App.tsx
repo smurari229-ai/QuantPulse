@@ -120,7 +120,7 @@ export default function App() {
         {activeView === 'market' && <MarketOverviewView selectedSymbol={selectedSymbol} onSelectSymbol={handleSelectSymbol} bars={bars} snapshot={marketSnapshot} validationResult={validationResult} isStaleData={marketSnapshot.dataQuality.isStale} />}
         {activeView === 'analysis' && <MarketAnalysisView symbol={selectedSymbol} indicators={indicators} currentPrice={marketSnapshot.lastPrice} />}
         {activeView === 'news' && <NewsEventView />}
-        {activeView === 'ai' && <AiDecisionView decision={aiDecision} indicators={indicators} currentPrice={marketSnapshot.lastPrice} symbol={selectedSymbol} onRefreshDecision={setAiDecision} />}
+        {activeView === 'ai' && <AiDecisionView decision={aiDecision} indicators={indicators} currentPrice={marketSnapshot.lastPrice} symbol={selectedSymbol} marketSnapshot={marketSnapshot} onRefreshDecision={setAiDecision} />}
         {activeView === 'strategy' && <StrategyStatusView symbol={selectedSymbol} bars={bars} />}
         {activeView === 'backtest' && <BacktestingLabView bars={bars} symbol={selectedSymbol} />}
         {activeView === 'paper' && <PaperTradingView portfolio={portfolio} marketSnapshot={marketSnapshot} isEmergencyKillSwitchActive={killActive} riskContext={riskContext} onOrderExecuted={handleOrderExecuted} onRiskVerdictGenerated={setCurrentVerdict} />}
