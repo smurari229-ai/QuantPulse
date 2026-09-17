@@ -16,7 +16,7 @@ interface PaperTradingViewProps {
 export const PaperTradingView: React.FC<PaperTradingViewProps> = ({ portfolio, marketSnapshot, isEmergencyKillSwitchActive = false, onOrderExecuted, onRiskVerdictGenerated }) => {
   const [symbol] = useState(marketSnapshot.symbol);
   const [side, setSide] = useState<'BUY' | 'SELL'>('BUY');
-  const [orderType, setOrderType] = useState<'MARKET' | 'LIMIT' | 'STOP_MARKET'>('MARKET');
+  const [orderType, setOrderType] = useState<'MARKET' | 'LIMIT'>('MARKET');
   const [quantity, setQuantity] = useState(10);
   const [limitPrice, setLimitPrice] = useState(Number(marketSnapshot.lastPrice.toFixed(2)));
   const [stopLossPrice, setStopLossPrice] = useState(Number((marketSnapshot.lastPrice * 0.96).toFixed(2)));
@@ -54,7 +54,7 @@ export const PaperTradingView: React.FC<PaperTradingViewProps> = ({ portfolio, m
       <div className="bg-slate-900 border border-slate-800 rounded-lg p-5 space-y-4 lg:col-span-2"><div className="flex justify-between items-center border-b border-slate-800 pb-3"><h3 className="text-xs font-mono font-bold text-slate-200">ORDER TICKET SPECIFICATION</h3><span className="text-[11px] font-mono text-slate-400">Target Asset: {symbol}</span></div>
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 font-mono text-xs">
           <div><label className="text-slate-400 text-[10px] block mb-1">SIDE</label><div className="grid grid-cols-2 gap-1.5"><button type="button" onClick={() => setSide('BUY')} className={`py-1.5 rounded font-bold ${side === 'BUY' ? 'bg-emerald-600 text-white' : 'bg-slate-800 text-slate-400'}`}>BUY</button><button type="button" onClick={() => setSide('SELL')} className={`py-1.5 rounded font-bold ${side === 'SELL' ? 'bg-rose-600 text-white' : 'bg-slate-800 text-slate-400'}`}>SELL</button></div></div>
-          <div><label className="text-slate-400 text-[10px] block mb-1">ORDER TYPE</label><select value={orderType} onChange={e => setOrderType(e.target.value as 'MARKET' | 'LIMIT' | 'STOP_MARKET')} className="w-full bg-slate-950 border border-slate-800 rounded px-2.5 py-1.5 text-slate-200"><option value="MARKET">MARKET</option><option value="LIMIT">LIMIT</option><option value="STOP_MARKET">STOP MARKET</option></select></div>
+          <div><label className="text-slate-400 text-[10px] block mb-1">ORDER TYPE</label><select value={orderType} onChange={e => setOrderType(e.target.value as 'MARKET' | 'LIMIT')} className="w-full bg-slate-950 border border-slate-800 rounded px-2.5 py-1.5 text-slate-200"><option value="MARKET">MARKET</option><option value="LIMIT">LIMIT</option></select></div>
           <div><label className="text-slate-400 text-[10px] block mb-1">QUANTITY</label><input type="number" min="1" value={quantity} onChange={e => setQuantity(Math.max(1, Number(e.target.value)))} className="w-full bg-slate-950 border border-slate-800 rounded px-2.5 py-1.5 text-slate-200" /></div>
           {orderType === 'LIMIT' && <div><label className="text-slate-400 text-[10px] block mb-1">LIMIT PRICE ($)</label><input type="number" step="0.05" value={limitPrice} onChange={e => setLimitPrice(Number(e.target.value))} className="w-full bg-slate-950 border border-slate-800 rounded px-2.5 py-1.5 text-slate-200" /></div>}
           <div><label className="text-slate-400 text-[10px] block mb-1">MANDATORY STOP-LOSS ($) *</label><input type="number" step="0.05" value={stopLossPrice} onChange={e => setStopLossPrice(Number(e.target.value))} className="w-full bg-slate-950 border border-slate-800 rounded px-2.5 py-1.5 text-rose-300" /></div>
