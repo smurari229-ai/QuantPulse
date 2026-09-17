@@ -86,6 +86,10 @@ export const RiskMonitorView: React.FC<RiskMonitorViewProps> = ({
             <span className="font-bold text-rose-400">{failCount}</span>
           </div>
           <div>
+            <span className="text-slate-400">CAUTION GATES: </span>
+            <span className="font-bold text-amber-400">{cautionCount}</span>
+          </div>
+          <div>
             <span className="text-slate-400">AUDIT TOKEN: </span>
             <span className="font-mono text-slate-200 bg-slate-900 px-2 py-0.5 rounded border border-slate-700 text-[10px]">
               {currentVerdict.auditableRiskToken.slice(0, 16)}...
@@ -208,21 +212,21 @@ export const RiskMonitorView: React.FC<RiskMonitorViewProps> = ({
                 const isPass = check.passed;
                 const isCaution = check.status === 'CAUTION';
                 return (
-                  <tr key={check.gateId} className="hover:bg-slate-800/40 transition-colors">
+                  <tr key={`${check.checkName}-${index}`} className="hover:bg-slate-800/40 transition-colors">
                     <td className="px-4 py-3 font-bold text-slate-500">#{index + 1}</td>
                     <td className="px-4 py-3 font-bold text-slate-200">
-                      {check.gateName}
+                      {check.checkName}
                     </td>
                     <td className="px-4 py-3">
-                      {isPass ? (
-                        <span className="flex items-center space-x-1 text-emerald-400 font-bold bg-emerald-950/50 border border-emerald-500/30 px-2 py-0.5 rounded text-[10px] w-fit">
-                          <CheckCircle2 className="w-3 h-3" />
-                          <span>PASS</span>
-                        </span>
-                      ) : isCaution ? (
+                      {isCaution ? (
                         <span className="flex items-center space-x-1 text-amber-400 font-bold bg-amber-950/50 border border-amber-500/30 px-2 py-0.5 rounded text-[10px] w-fit">
                           <AlertTriangle className="w-3 h-3" />
                           <span>CAUTION</span>
+                        </span>
+                      ) : isPass ? (
+                        <span className="flex items-center space-x-1 text-emerald-400 font-bold bg-emerald-950/50 border border-emerald-500/30 px-2 py-0.5 rounded text-[10px] w-fit">
+                          <CheckCircle2 className="w-3 h-3" />
+                          <span>PASS</span>
                         </span>
                       ) : (
                         <span className="flex items-center space-x-1 text-rose-400 font-bold bg-rose-950/80 border border-rose-500/80 px-2 py-0.5 rounded text-[10px] w-fit">
@@ -232,8 +236,8 @@ export const RiskMonitorView: React.FC<RiskMonitorViewProps> = ({
                       )}
                     </td>
                     <td className="px-4 py-3 text-slate-100 font-semibold">{check.currentValue}</td>
-                    <td className="px-4 py-3 text-slate-400">{check.threshold}</td>
-                    <td className="px-4 py-3 text-[11px] text-slate-300">{check.message}</td>
+                    <td className="px-4 py-3 text-slate-400">{check.thresholdLimit}</td>
+                    <td className="px-4 py-3 text-[11px] text-slate-300">{check.reason}</td>
                   </tr>
                 );
               })}
