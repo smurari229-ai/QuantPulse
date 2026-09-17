@@ -32,8 +32,9 @@ export function executePaperOrder(order: OrderRequest, currentPortfolio: Portfol
   const factor = 1 + slippageBps / 10000;
 
   let rawPrice: number;
+  let limitPrice: number | undefined;
   if (order.type === 'LIMIT') {
-    const limitPrice = order.limitPrice;
+    limitPrice = order.limitPrice;
     if (!Number.isFinite(limitPrice) || limitPrice <= 0) return reject(order, currentPortfolio, 'Limit order requires a positive finite limit price.');
     const marketable = order.side === 'BUY' ? marketSnapshot.ask <= limitPrice : marketSnapshot.bid >= limitPrice;
     if (!marketable) return reject(order, currentPortfolio, `Limit order is not marketable at current quote (bid $${marketSnapshot.bid.toFixed(2)}, ask $${marketSnapshot.ask.toFixed(2)}, limit $${limitPrice.toFixed(2)}). Pending limit orders are not supported by this paper simulator.`);
@@ -46,6 +47,10 @@ export function executePaperOrder(order: OrderRequest, currentPortfolio: Portfol
 
   if (!Number.isFinite(rawPrice) || rawPrice <= 0) return reject(order, currentPortfolio, 'Invalid execution price.');
   const fillPrice = order.side === 'BUY' ? Math.round(rawPrice * factor * 100) / 100 : Math.round((rawPrice / factor) * 100) / 100;
+  if (limitPrice !== undefined) {
+    const violatesLimit = order.side === 'BUY' ? fillPrice > limitPrice : fillPrice < limitPrice;
+    if (violatesLimit) return reject(order, currentPortfolio, `Limit order cancelled: modeled slippage would breach the ${order.side === 'BUY' ? 'maximum buy' : 'minimum sell'} price of $${limitPrice.toFixed(2)}.`);
+  }
   const value = fillPrice * order.quantity;
   const brokerFee = Math.max(20, Math.round(value * 0.0003 * 100) / 100);
   const exchangeFee = Math.round(value * 0.000035 * 100) / 100;
