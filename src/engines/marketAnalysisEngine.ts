@@ -165,8 +165,13 @@ export function analyzeMarketFeatures(bars: OHLCV[]): TechnicalIndicators {
   const lookbackSlice = bars.slice(-40);
   const localLows = lookbackSlice.map((b) => b.low);
   const localHighs = lookbackSlice.map((b) => b.high);
-  const nearestSupport = Math.min(...localLows.filter((p) => p < currentClose)) || currentClose * 0.98;
-  const nearestResistance = Math.max(...localHighs.filter((p) => p > currentClose)) || currentClose * 1.02;
+  // The nearest support is the highest low below price; the nearest resistance
+  // is the lowest high above price. Using min/max in the opposite direction
+  // would select the farthest level and misstate the displayed risk context.
+  const supportsBelow = localLows.filter((p) => p < currentClose);
+  const resistancesAbove = localHighs.filter((p) => p > currentClose);
+  const nearestSupport = supportsBelow.length > 0 ? Math.max(...supportsBelow) : currentClose * 0.98;
+  const nearestResistance = resistancesAbove.length > 0 ? Math.min(...resistancesAbove) : currentClose * 1.02;
 
   const distSuppPct = Math.round((Math.abs(currentClose - nearestSupport) / currentClose) * 1000) / 10;
   const distResPct = Math.round((Math.abs(nearestResistance - currentClose) / currentClose) * 1000) / 10;
