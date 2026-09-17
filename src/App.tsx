@@ -41,14 +41,7 @@ export default function App() {
   const killActive = killSwitchState.isGlobalTradingOff || killSwitchState.isEmergencyStopTripped || killSwitchState.isDailyLossLockTripped || killSwitchState.isApiFailureLockTripped || killSwitchState.isDataStaleLockTripped || killSwitchState.isAbnormalFrequencyLockTripped;
   const [aiDecision, setAiDecision] = useState(() => {
     const news = getNewsSentimentForSymbol(selectedSymbol);
-    return generateAIDecision({
-      symbol: selectedSymbol,
-      timestamp: Date.now(),
-      currentPrice: marketSnapshot.lastPrice,
-      indicators,
-      newsSentiment: news.latestItem ? { headline: news.latestItem.headline, score: news.latestItem.sentimentScore, source: news.latestItem.source, timestamp: news.latestItem.timestamp } : undefined,
-      currentMarketConditions: { spreadBps: ((marketSnapshot.ask - marketSnapshot.bid) / marketSnapshot.bid) * 10000, dataStalenessMs: Date.now() - marketSnapshot.timestamp },
-    });
+    return generateAIDecision({ symbol: selectedSymbol, timestamp: Date.now(), currentPrice: marketSnapshot.lastPrice, indicators, newsSentiment: news.latestItem ? { headline: news.latestItem.headline, score: news.latestItem.sentimentScore, source: news.latestItem.source, timestamp: news.latestItem.timestamp } : undefined, currentMarketConditions: { spreadBps: ((marketSnapshot.ask - marketSnapshot.bid) / marketSnapshot.bid) * 10000, dataStalenessMs: Date.now() - marketSnapshot.timestamp } });
   });
 
   useEffect(() => {
@@ -56,10 +49,7 @@ export default function App() {
     const spreadBps = marketSnapshot.bid > 0 ? ((marketSnapshot.ask - marketSnapshot.bid) / marketSnapshot.bid) * 10000 : Number.POSITIVE_INFINITY;
     const news = getNewsSentimentForSymbol(selectedSymbol);
     setAiDecision(generateAIDecision({
-      symbol: selectedSymbol,
-      timestamp: Date.now(),
-      currentPrice: marketSnapshot.lastPrice,
-      indicators,
+      symbol: selectedSymbol, timestamp: Date.now(), currentPrice: marketSnapshot.lastPrice, indicators,
       newsSentiment: news.latestItem ? { headline: news.latestItem.headline, score: news.latestItem.sentimentScore, source: news.latestItem.source, timestamp: news.latestItem.timestamp } : undefined,
       currentMarketConditions: { spreadBps, dataStalenessMs },
     }));
@@ -69,26 +59,17 @@ export default function App() {
     const today = new Date();
     const todayKey = `${today.getFullYear()}-${today.getMonth()}-${today.getDate()}`;
     const lastOrderTimestamps: Record<string, number> = {};
-    const recentOrders = orders.map((order) => ({
-      id: order.id,
-      symbol: order.symbol,
-      side: order.side,
-      quantity: order.quantity,
-      timestamp: order.timestamp ?? order.createdAt ?? 0,
-    }));
-
+    const recentOrders = orders.map((order) => ({ id: order.id, symbol: order.symbol, side: order.side, quantity: order.quantity, timestamp: order.timestamp ?? order.createdAt ?? 0 }));
     for (const order of recentOrders) {
       if (order.timestamp <= 0) continue;
       const previous = lastOrderTimestamps[order.symbol] ?? 0;
       if (order.timestamp > previous) lastOrderTimestamps[order.symbol] = order.timestamp;
     }
-
     const todayExecutedTradesCount = recentOrders.filter((order) => {
       if (order.timestamp <= 0) return false;
       const date = new Date(order.timestamp);
       return `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}` === todayKey;
     }).length;
-
     return { lastOrderTimestamps, recentOrders, todayExecutedTradesCount, brokerHeartbeatActive: true, isEmergencyKillSwitchActive: killActive };
   }, [orders, killActive]);
 
@@ -97,23 +78,27 @@ export default function App() {
     return evaluateRiskGates(dummyOrder, INITIAL_PORTFOLIO_STATE, marketSnapshot, { isEmergencyKillSwitchActive: killActive }, DEFAULT_RISK_CONFIG);
   });
 
+  useEffect(() => {
+    const referencePrice = marketSnapshot.lastPrice;
+    const dummyOrder: OrderRequest = {
+      id: `VIEW-AUD-${Date.now()}`, orderId: `VIEW-AUD-${Date.now()}`, clientOrderId: `CLI-VIEW-${Date.now()}`,
+      symbol: selectedSymbol, side: 'BUY', type: 'MARKET', quantity: 1, limitPrice: referencePrice,
+      stopLossPrice: referencePrice * 0.96, takeProfitPrice: referencePrice * 1.08,
+      executionMode: 'PAPER', timestamp: Date.now(),
+    };
+    setCurrentVerdict(evaluateRiskGates(dummyOrder, portfolio, marketSnapshot, riskContext, DEFAULT_RISK_CONFIG));
+  }, [selectedSymbol, marketSnapshot, portfolio, riskContext]);
+
   const handleSelectSymbol = useCallback((newSymbol: string) => {
     setSelectedSymbol(newSymbol);
     const newBars = generateSyntheticDailyBars(newSymbol, 120);
     setBars(newBars);
     const newSnap = generateMarketSnapshot(newSymbol, newBars[newBars.length - 1].close);
     setMarketSnapshot(newSnap);
-    const dummyOrder: OrderRequest = { id: `AUD-${Date.now().toString().slice(-4)}`, orderId: `AUD-${Date.now().toString().slice(-4)}`, clientOrderId: `CLI-${Date.now()}`, symbol: newSymbol, side: 'BUY', type: 'MARKET', quantity: 10, limitPrice: newSnap.lastPrice, stopLossPrice: Math.round(newSnap.lastPrice * 0.96), takeProfitPrice: Math.round(newSnap.lastPrice * 1.08), executionMode: 'PAPER', timestamp: Date.now() };
-    setCurrentVerdict(evaluateRiskGates(dummyOrder, portfolio, newSnap, { ...riskContext, isEmergencyKillSwitchActive: killActive }, DEFAULT_RISK_CONFIG));
-  }, [portfolio, killActive, riskContext]);
+  }, []);
 
   const handleOrderExecuted = (newPortfolio: PortfolioState, executedOrder: OrderRequest) => { setPortfolio(newPortfolio); setOrders(prev => [executedOrder, ...prev]); };
-  const handleHeaderKillSwitch = () => {
-    const tripped = triggerEmergencyKillSwitch(killSwitchState, 'Header emergency kill switch pressed');
-    setKillSwitchState(tripped);
-    const dummyOrder: OrderRequest = { id: `KILL-AUD-${Date.now()}`, orderId: `KILL-AUD-${Date.now()}`, clientOrderId: `CLI-KILL-${Date.now()}`, symbol: selectedSymbol, side: 'BUY', type: 'MARKET', quantity: 1, limitPrice: marketSnapshot.lastPrice, stopLossPrice: marketSnapshot.lastPrice * 0.96, takeProfitPrice: marketSnapshot.lastPrice * 1.08, executionMode: 'PAPER', timestamp: Date.now() };
-    setCurrentVerdict(evaluateRiskGates(dummyOrder, portfolio, marketSnapshot, { ...riskContext, isEmergencyKillSwitchActive: true }, DEFAULT_RISK_CONFIG));
-  };
+  const handleHeaderKillSwitch = () => setKillSwitchState(triggerEmergencyKillSwitch(killSwitchState, 'Header emergency kill switch pressed'));
   const failedRiskChecksCount = currentVerdict.checks.filter(c => !c.passed).length;
 
   return <div id="quantpulse-platform-root" className="min-h-screen bg-slate-950 text-slate-100 flex flex-col antialiased selection:bg-blue-600 selection:text-white">
