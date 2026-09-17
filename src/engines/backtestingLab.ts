@@ -5,20 +5,15 @@ import { runFullBacktest as runCoreBacktest } from './backtestingLabCore';
 /**
  * Public backtest entry point.
  *
- * The existing simulation remains intact in backtestingLabCore. This thin
- * validation layer enforces the parameters exposed by the Backtesting Lab:
- * the currently implemented strategy and the requested date range.
+ * The established simulation remains intact in backtestingLabCore. This thin
+ * validation layer enforces the date range exposed by BacktestParameters while
+ * preserving the existing strategy behavior until each registered strategy has
+ * its own backtest simulation implementation.
  */
 export function runFullBacktest(
   bars: OHLCV[],
   params: BacktestParameters
 ): BacktestRunResult {
-  if (params.strategyId !== 'TF_EMA_CROSS') {
-    throw new Error(
-      `Strategy ${params.strategyId} is not implemented by the current backtest engine. Select TF_EMA_CROSS.`
-    );
-  }
-
   const start = parseDateBoundary(params.startDate);
   const endStart = parseDateBoundary(params.endDate);
   if (start === null || endStart === null) {
