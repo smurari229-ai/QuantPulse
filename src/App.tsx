@@ -39,18 +39,28 @@ export default function App() {
   const validationResult = useMemo(() => validateMarketDataSeries(bars), [bars]);
   const indicators = useMemo(() => computeAllIndicators(bars), [bars]);
   const killActive = killSwitchState.isGlobalTradingOff || killSwitchState.isEmergencyStopTripped || killSwitchState.isDailyLossLockTripped || killSwitchState.isApiFailureLockTripped || killSwitchState.isDataStaleLockTripped || killSwitchState.isAbnormalFrequencyLockTripped;
-  const [aiDecision, setAiDecision] = useState(() => generateAIDecision({ symbol: selectedSymbol, timestamp: Date.now(), currentPrice: marketSnapshot.lastPrice, indicators, newsSentiment: { score: getNewsSentimentForSymbol(selectedSymbol).avgSentiment }, currentMarketConditions: { spreadBps: ((marketSnapshot.ask - marketSnapshot.bid) / marketSnapshot.bid) * 10000, dataStalenessMs: Date.now() - marketSnapshot.timestamp } }));
+  const [aiDecision, setAiDecision] = useState(() => {
+    const news = getNewsSentimentForSymbol(selectedSymbol);
+    return generateAIDecision({
+      symbol: selectedSymbol,
+      timestamp: Date.now(),
+      currentPrice: marketSnapshot.lastPrice,
+      indicators,
+      newsSentiment: news.latestItem ? { headline: news.latestItem.headline, score: news.latestItem.sentimentScore, source: news.latestItem.source, timestamp: news.latestItem.timestamp } : undefined,
+      currentMarketConditions: { spreadBps: ((marketSnapshot.ask - marketSnapshot.bid) / marketSnapshot.bid) * 10000, dataStalenessMs: Date.now() - marketSnapshot.timestamp },
+    });
+  });
 
   useEffect(() => {
     const dataStalenessMs = Math.max(0, Date.now() - marketSnapshot.timestamp);
     const spreadBps = marketSnapshot.bid > 0 ? ((marketSnapshot.ask - marketSnapshot.bid) / marketSnapshot.bid) * 10000 : Number.POSITIVE_INFINITY;
-    const newsSentiment = getNewsSentimentForSymbol(selectedSymbol);
+    const news = getNewsSentimentForSymbol(selectedSymbol);
     setAiDecision(generateAIDecision({
       symbol: selectedSymbol,
       timestamp: Date.now(),
       currentPrice: marketSnapshot.lastPrice,
       indicators,
-      newsSentiment: { score: newsSentiment.avgSentiment },
+      newsSentiment: news.latestItem ? { headline: news.latestItem.headline, score: news.latestItem.sentimentScore, source: news.latestItem.source, timestamp: news.latestItem.timestamp } : undefined,
       currentMarketConditions: { spreadBps, dataStalenessMs },
     }));
   }, [selectedSymbol, marketSnapshot, indicators]);
@@ -79,13 +89,7 @@ export default function App() {
       return `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}` === todayKey;
     }).length;
 
-    return {
-      lastOrderTimestamps,
-      recentOrders,
-      todayExecutedTradesCount,
-      brokerHeartbeatActive: true,
-      isEmergencyKillSwitchActive: killActive,
-    };
+    return { lastOrderTimestamps, recentOrders, todayExecutedTradesCount, brokerHeartbeatActive: true, isEmergencyKillSwitchActive: killActive };
   }, [orders, killActive]);
 
   const [currentVerdict, setCurrentVerdict] = useState<RiskValidationVerdict>(() => {
