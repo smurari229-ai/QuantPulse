@@ -69,12 +69,13 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       </div>
 
       <div className="bg-slate-900 border border-slate-800 rounded-lg p-5 space-y-4 font-mono text-xs">
-        <div className="flex items-center space-x-2 text-slate-100 font-bold border-b border-slate-800 pb-2"><Activity className="w-4 h-4 text-emerald-400" /><span>SYSTEM RUNTIME & CLOUD CONTAINER TELEMETRY</span></div>
+        <div className="flex items-center space-x-2 text-slate-100 font-bold border-b border-slate-800 pb-2"><Activity className="w-4 h-4 text-emerald-400" /><span>SIMULATION TELEMETRY (NON-PRODUCTION)</span></div>
+        <div className="p-3 bg-amber-950/20 border border-amber-500/30 rounded text-[10px] text-amber-200/80">The values below are static UI demonstration values, not live container, broker, WebSocket, or memory telemetry.</div>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <div className="p-3 bg-slate-950/60 rounded border border-slate-800"><span className="text-slate-400 text-[10px] block mb-1">FEED TICK LATENCY</span><span className="text-emerald-400 font-bold text-sm">38 ms</span><span className="text-[10px] text-slate-500 block mt-0.5">WebSocket L2 Stream</span></div>
-          <div className="p-3 bg-slate-950/60 rounded border border-slate-800"><span className="text-slate-400 text-[10px] block mb-1">EVENT LOOP TICK DRIFT</span><span className="text-emerald-400 font-bold text-sm">1.2 ms</span><span className="text-[10px] text-slate-500 block mt-0.5">Jitter &lt; 3.0ms</span></div>
-          <div className="p-3 bg-slate-950/60 rounded border border-slate-800"><span className="text-slate-400 text-[10px] block mb-1">AUDIT LEDGER HEIGHT</span><span className="text-slate-200 font-bold text-sm">SHA-256 Chained</span><span className="text-[10px] text-slate-500 block mt-0.5">Zero Secret Sanitized</span></div>
-          <div className="p-3 bg-slate-950/60 rounded border border-slate-800"><span className="text-slate-400 text-[10px] block mb-1">CONTAINER MEMORY</span><span className="text-slate-200 font-bold text-sm">184 MB / 1024 MB</span><span className="text-[10px] text-slate-500 block mt-0.5">V8 Heap Safe</span></div>
+          <div className="p-3 bg-slate-950/60 rounded border border-slate-800"><span className="text-slate-400 text-[10px] block mb-1">SIMULATED FEED LATENCY</span><span className="text-emerald-400 font-bold text-sm">45 ms</span><span className="text-[10px] text-slate-500 block mt-0.5">Synthetic snapshot generator</span></div>
+          <div className="p-3 bg-slate-950/60 rounded border border-slate-800"><span className="text-slate-400 text-[10px] block mb-1">EVENT LOOP DRIFT</span><span className="text-slate-200 font-bold text-sm">Not measured</span><span className="text-[10px] text-slate-500 block mt-0.5">No production runtime probe</span></div>
+          <div className="p-3 bg-slate-950/60 rounded border border-slate-800"><span className="text-slate-400 text-[10px] block mb-1">AUDIT LEDGER</span><span className="text-slate-200 font-bold text-sm">In-memory hash chain</span><span className="text-[10px] text-slate-500 block mt-0.5">Non-cryptographic demo</span></div>
+          <div className="p-3 bg-slate-950/60 rounded border border-slate-800"><span className="text-slate-400 text-[10px] block mb-1">CONTAINER MEMORY</span><span className="text-slate-200 font-bold text-sm">Not measured</span><span className="text-[10px] text-slate-500 block mt-0.5">No server runtime telemetry</span></div>
         </div>
       </div>
     </div>
