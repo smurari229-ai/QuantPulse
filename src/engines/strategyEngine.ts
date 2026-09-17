@@ -78,17 +78,22 @@ export function evaluateStrategySignal(strategy: StrategyDefinition, symbol: str
       rationale = `Mean-reversion short: RSI ${currentRsi.toFixed(1)}, upper Bollinger Band touched in ${indicators.marketRegime}.`;
     } else { signal = 'HOLD'; rationale = `Mean-reversion conditions not fully satisfied (Regime: ${indicators.marketRegime}, RSI: ${currentRsi.toFixed(1)}).`; }
   } else if (strategy.id === 'BO_VOLATILITY_SQUEEZE') {
-    const recentBandwidths = bollinger.slice(Math.max(0, currentIndex - 19), currentIndex + 1).map((band) => band.bandwidth).filter(Number.isFinite);
-    const sortedBandwidths = [...recentBandwidths].sort((a, b) => a - b);
+    const priorBandwidths = bollinger
+      .slice(Math.max(0, currentIndex - 10), currentIndex)
+      .map((band) => band.bandwidth)
+      .filter(Number.isFinite);
+    const sortedBandwidths = [...priorBandwidths].sort((a, b) => a - b);
     const percentile20 = sortedBandwidths[Math.max(0, Math.floor((sortedBandwidths.length - 1) * 0.2))] ?? Number.POSITIVE_INFINITY;
-    const compressedBars = recentBandwidths.filter((bandwidth) => bandwidth <= percentile20 || bandwidth < 0.035).length;
-    const compressionWindow = recentBandwidths.length >= 10 && compressedBars >= 10;
+    const compressedBars = priorBandwidths.filter((bandwidth) => bandwidth <= percentile20 || bandwidth < 0.035).length;
+    const compressionWindow = priorBandwidths.length >= 10 && compressedBars >= 10;
+    const previousBandwidth = bollinger[currentIndex - 1]?.bandwidth ?? 0;
+    const expansionAfterCompression = currentBb.bandwidth > Math.max(0.035, previousBandwidth);
     const expansionCandle = currentIndex > 0 && currentPrice > bars[currentIndex - 1].close;
-    if (compressionWindow && currentBb.bandwidth < 0.035 && currentPrice > currentBb.upper && currentRelativeVolume > 1.5 && expansionCandle) {
+    if (compressionWindow && expansionAfterCompression && currentPrice > currentBb.upper && currentRelativeVolume > 1.5 && expansionCandle) {
       const breakoutRange = Math.max(currentAtr, bars[currentIndex].high - bars[currentIndex].low);
       signal = 'BUY'; stopLoss = Math.round((bars[currentIndex].low - 0.1 * currentAtr) * 100) / 100; takeProfit = Math.round((currentPrice + 2.5 * breakoutRange) * 100) / 100;
-      rationale = `Bollinger squeeze in lowest-volatility bucket followed by upper-band expansion and ${currentRelativeVolume}x volume.`;
-    } else rationale = 'Volatility squeeze, breakout, and high-volume confirmation are not all active.';
+      rationale = `Bollinger squeeze compressed for 10 bars, then bandwidth expanded with an upper-band breakout and ${currentRelativeVolume}x volume.`;
+    } else rationale = 'Volatility squeeze, post-compression expansion, breakout, and high-volume confirmation are not all active.';
   } else {
     const macd12 = calculateEMA(closes, 12);
     const macd26 = calculateEMA(closes, 26);
