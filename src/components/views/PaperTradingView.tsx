@@ -2,18 +2,19 @@ import React, { useState } from 'react';
 import { OrderRequest, PortfolioState, RiskValidationVerdict } from '../../types/order';
 import { MarketDataSnapshot } from '../../types/market';
 import { executePaperOrder } from '../../engines/paperTradingEngine';
-import { evaluateRiskGates } from '../../engines/riskEngine';
+import { evaluateRiskGates, RecentOrderContext } from '../../engines/riskEngine';
 import { ClipboardList, ShieldAlert, ArrowRight, RefreshCw } from 'lucide-react';
 
 interface PaperTradingViewProps {
   portfolio: PortfolioState;
   marketSnapshot: MarketDataSnapshot;
   isEmergencyKillSwitchActive?: boolean;
+  riskContext: RecentOrderContext;
   onOrderExecuted: (newPortfolio: PortfolioState, executedOrder: OrderRequest) => void;
   onRiskVerdictGenerated: (verdict: RiskValidationVerdict) => void;
 }
 
-export const PaperTradingView: React.FC<PaperTradingViewProps> = ({ portfolio, marketSnapshot, isEmergencyKillSwitchActive = false, onOrderExecuted, onRiskVerdictGenerated }) => {
+export const PaperTradingView: React.FC<PaperTradingViewProps> = ({ portfolio, marketSnapshot, isEmergencyKillSwitchActive = false, riskContext, onOrderExecuted, onRiskVerdictGenerated }) => {
   const [symbol] = useState(marketSnapshot.symbol);
   const [side, setSide] = useState<'BUY' | 'SELL'>('BUY');
   const [orderType, setOrderType] = useState<'MARKET' | 'LIMIT'>('MARKET');
@@ -35,7 +36,7 @@ export const PaperTradingView: React.FC<PaperTradingViewProps> = ({ portfolio, m
     setIsSubmitting(true);
     const id = `ORD-${Date.now().toString().slice(-6)}`;
     const proposedOrder: OrderRequest = { id, orderId: id, clientOrderId: `CLI-${Date.now()}`, symbol, side, type: orderType, quantity, limitPrice: orderType === 'LIMIT' ? limitPrice : marketSnapshot.lastPrice, stopLossPrice, takeProfitPrice, executionMode: 'PAPER', timestamp: Date.now(), aiDecisionId: 'MANUAL_PAPER_DESK' };
-    const verdict = evaluateRiskGates(proposedOrder, portfolio, marketSnapshot, { isEmergencyKillSwitchActive });
+    const verdict = evaluateRiskGates(proposedOrder, portfolio, marketSnapshot, { ...riskContext, isEmergencyKillSwitchActive });
     onRiskVerdictGenerated(verdict);
     if (!verdict.isApproved) { setExecutionLog(prev => [`[${new Date().toLocaleTimeString()}] REJECTED by Risk Engine: ${verdict.rejectionReasons.join('; ')}`, ...prev]); setIsSubmitting(false); return; }
     setTimeout(() => {
