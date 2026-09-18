@@ -116,6 +116,7 @@ const customRiskConfig = { ...DEFAULT_RISK_CONFIG, maxPositionSizeNotional: 1 };
 const settingsDrivenVerdict = evaluateRiskGates(baseOrder, INITIAL_PORTFOLIO_STATE, snapshot, undefined, customRiskConfig);
 const invalidConfigVerdict = evaluateRiskGates(baseOrder, INITIAL_PORTFOLIO_STATE, snapshot, undefined, { ...DEFAULT_RISK_CONFIG, maxSpreadBps: Number.NaN });
 assert(!invalidConfigVerdict.isApproved && invalidConfigVerdict.rejectionReasons.some(reason => reason.includes('Invalid or non-finite risk configuration')), 'invalid runtime risk configuration fails closed');
+assert(invalidConfigVerdict.checks[0]?.gateName === 'RISK CONFIGURATION SANITY', 'invalid risk configuration uses its own gate identity');
 const invalidOrderVerdict = evaluateRiskGates({ ...baseOrder, side: 'INVALID' as any, type: 'INVALID' as any, symbol: '' }, INITIAL_PORTFOLIO_STATE, snapshot);
 assert(!invalidOrderVerdict.isApproved && invalidOrderVerdict.rejectionReasons.some(reason => reason.includes('Malformed order or market pricing input')), 'invalid order side/type/symbol fails closed');
 
