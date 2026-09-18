@@ -95,12 +95,10 @@ const futureDuplicateVerdict = evaluateRiskGates(
 );
 assert(futureDuplicateVerdict.checks.find(c => c.checkName === 'DUPLICATE_ORDER_DETECTION')?.passed, 'future order record is not misclassified as a duplicate');
 
-const originalMaxNotional = DEFAULT_RISK_CONFIG.maxPositionSizeNotional;
-Object.assign(DEFAULT_RISK_CONFIG, { maxPositionSizeNotional: 1 });
-const settingsDrivenVerdict = evaluateRiskGates(baseOrder, INITIAL_PORTFOLIO_STATE, snapshot);
-assert(!settingsDrivenVerdict.isApproved, 'saved risk boundary is enforced by runtime risk evaluation');
-assert(settingsDrivenVerdict.rejectionReasons.some(reason => reason.includes('Position size exceeds $1')), 'runtime verdict reflects saved notional boundary');
-Object.assign(DEFAULT_RISK_CONFIG, { maxPositionSizeNotional: originalMaxNotional });
+const customRiskConfig = { ...DEFAULT_RISK_CONFIG, maxPositionSizeNotional: 1 };
+const settingsDrivenVerdict = evaluateRiskGates(baseOrder, INITIAL_PORTFOLIO_STATE, snapshot, undefined, customRiskConfig);
+assert(!settingsDrivenVerdict.isApproved, 'runtime risk evaluation enforces the supplied saved risk boundary');
+assert(settingsDrivenVerdict.rejectionReasons.some(reason => reason.includes('Position size exceeds $1')), 'runtime verdict reflects supplied saved notional boundary');
 
 const exposurePrice = snapshot.lastPrice;
 const exposurePortfolio = {
