@@ -26,6 +26,7 @@ export const SUPPORTED_INSTRUMENTS: InstrumentMetadata[] = [
 // Deterministic synthetic historical generator based on Geometric Brownian Motion + Mean-reverting drift
 export function generateRealisticHistoricalOHLCV(symbol: string, daysCount = 120, basePrice?: number, volatility = 0.015): OHLCV[] {
   const defaults: Record<string, number> = { NIFTY50: 24850.0, RELIANCE: 2940.0, TCS: 4280.0, SPY: 565.0, 'BTC-USD': 64200.0 };
+  if (!Object.prototype.hasOwnProperty.call(defaults, symbol)) throw new Error(`Unsupported market-data symbol: ${symbol}`);
   if (!Number.isInteger(daysCount) || daysCount <= 0) throw new Error('daysCount must be a positive integer.');
   if (!Number.isFinite(volatility) || volatility <= 0) throw new Error('volatility must be a finite value greater than zero.');
   if (basePrice !== undefined && (!Number.isFinite(basePrice) || basePrice <= 0)) throw new Error('basePrice must be a finite value greater than zero.');
