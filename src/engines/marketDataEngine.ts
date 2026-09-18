@@ -101,7 +101,10 @@ export function getLiveSnapshot(symbol: string, lastClose: number, options?: { i
   const ask = Math.round((lastClose + halfSpread) * 100) / 100;
   const latency = options?.latencyMs ?? (options?.isStale ? 6500 : 45);
   if (!Number.isFinite(latency) || latency < 0) throw new Error('latencyMs must be a finite non-negative number.');
-  const isStale = options?.isStale ?? (latency > 3000);
+  // A caller may request a stale override for testing, but latency itself
+  // is always authoritative for the safety flag: data beyond 3000ms cannot be
+  // represented as fresh market data.
+  const isStale = (options?.isStale ?? false) || latency > 3000;
   return {
     symbol,
     timestamp: Date.now() - latency,
