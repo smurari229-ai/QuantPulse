@@ -36,7 +36,7 @@ export default function App() {
   const [marketSnapshot, setMarketSnapshot] = useState(() => generateMarketSnapshot('NIFTY50', bars[bars.length - 1].close));
   const [portfolio, setPortfolio] = useState<PortfolioState>(INITIAL_PORTFOLIO_STATE);
   const [orders, setOrders] = useState<OrderRequest[]>([]);
-  const [riskConfigRevision, setRiskConfigRevision] = useState(0);
+  const [riskConfig, setRiskConfig] = useState<RiskEngineConfig>({ ...DEFAULT_RISK_CONFIG });
   const validationResult = useMemo(() => validateMarketDataSeries(bars), [bars]);
   const indicators = useMemo(() => computeAllIndicators(bars), [bars]);
   const killActive = killSwitchState.isGlobalTradingOff || killSwitchState.isEmergencyStopTripped || killSwitchState.isDailyLossLockTripped || killSwitchState.isApiFailureLockTripped || killSwitchState.isDataStaleLockTripped || killSwitchState.isAbnormalFrequencyLockTripped;
