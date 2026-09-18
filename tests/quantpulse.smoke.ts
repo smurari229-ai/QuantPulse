@@ -104,8 +104,6 @@ assert(!invalidOrderVerdict.isApproved && invalidOrderVerdict.rejectionReasons.s
 let unsupportedSymbolRejected = false;
 try { getLiveSnapshot('UNSUPPORTED', 100); } catch { unsupportedSymbolRejected = true; }
 assert(unsupportedSymbolRejected, 'unsupported market-data symbol is rejected');
-const unsortedBars = [bars[2], { ...bars[1], close: Number.NaN }, bars[0]];
-const scopedGuardResult = runFullBacktest; // compile-time reference retained; input guard sanitization is covered by engine-level validation tests.
 assert(!settingsDrivenVerdict.isApproved, 'runtime risk evaluation enforces the supplied saved risk boundary');
 assert(settingsDrivenVerdict.rejectionReasons.some(reason => reason.includes('Position size exceeds $1')), 'runtime verdict reflects supplied saved notional boundary');
 
