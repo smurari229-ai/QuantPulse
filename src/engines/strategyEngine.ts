@@ -94,7 +94,7 @@ export function evaluateStrategySignal(strategy: StrategyDefinition, symbol: str
       signal = 'BUY'; stopLoss = Math.round((bars[currentIndex].low - 0.1 * currentAtr) * 100) / 100; takeProfit = Math.round((currentPrice + 2.5 * breakoutRange) * 100) / 100;
       rationale = `Bollinger squeeze compressed for 10 bars, then bandwidth expanded with an upper-band breakout and ${currentRelativeVolume}x volume.`;
     } else rationale = 'Volatility squeeze, post-compression expansion, breakout, and high-volume confirmation are not all active.';
-  } else {
+  } else if (strategy.id === 'MOM_MACD_HIST') {
     const macd12 = calculateEMA(closes, 12);
     const macd26 = calculateEMA(closes, 26);
     const macdDiffs = macd12.map((value, index) => value - macd26[index]);
@@ -105,6 +105,11 @@ export function evaluateStrategySignal(strategy: StrategyDefinition, symbol: str
       signal = 'BUY'; stopLoss = Math.round((currentPrice - 1.8 * currentAtr) * 100) / 100; takeProfit = Math.round((currentPrice + 3.0 * currentAtr) * 100) / 100;
       rationale = `MACD histogram acceleration above zero with RSI ${currentRsi.toFixed(1)} and price above EMA 50.`;
     } else rationale = `MACD acceleration or momentum filters not satisfied (histogram ${indicators.macd.histogram.toFixed(2)}).`;
+  } else {
+    signal = 'NO_TRADE';
+    stopLoss = currentPrice;
+    takeProfit = currentPrice;
+    rationale = `Unsupported strategy ID "${strategy.id}". Strategy evaluation halted safely.`;
   }
 
   if (!Number.isFinite(stopLoss) || !Number.isFinite(takeProfit) || stopLoss <= 0 || takeProfit <= 0) {
