@@ -21,6 +21,7 @@ export const MarketOverviewView: React.FC<MarketOverviewViewProps> = ({
   isStaleData,
 }) => {
   const [activeTab, setActiveTab] = useState<'chart' | 'metadata' | 'data_quality'>('chart');
+  const dataAgeMs = Number.isFinite(snapshot.timestamp) ? Math.max(0, Date.now() - snapshot.timestamp) : Number.POSITIVE_INFINITY;
   const metadata = SUPPORTED_INSTRUMENTS.find((i) => i.symbol === selectedSymbol) || SUPPORTED_INSTRUMENTS[0];
 
   // SVG Candlestick math
@@ -80,7 +81,7 @@ export const MarketOverviewView: React.FC<MarketOverviewViewProps> = ({
           <div className="flex items-center space-x-1">
             <Clock className={`w-3.5 h-3.5 ${isStaleData ? 'text-rose-400' : 'text-emerald-400'}`} />
             <span className={isStaleData ? 'text-rose-400 font-bold' : 'text-emerald-400'}>
-              {snapshot.dataQuality.latencyMs}ms
+              {Number.isFinite(dataAgeMs) ? Math.round(dataAgeMs) : 'INVALID'}ms
             </span>
           </div>
         </div>
@@ -290,8 +291,8 @@ export const MarketOverviewView: React.FC<MarketOverviewViewProps> = ({
                     </div>
                     <div className="flex justify-between">
                       <span className="text-slate-400">Staleness Status:</span>
-                      <span className={snapshot.dataQuality.isStale ? 'text-rose-400 font-bold' : 'text-emerald-400'}>
-                        {snapshot.dataQuality.isStale ? 'STALE SIMULATION (TRADING HALTED)' : 'FRESH SIMULATION'}
+                      <span className={isStaleData ? 'text-rose-400 font-bold' : 'text-emerald-400'}>
+                        {isStaleData ? 'STALE SIMULATION (TRADING HALTED)' : 'FRESH SIMULATION'}
                       </span>
                     </div>
                     <div className="flex justify-between">
