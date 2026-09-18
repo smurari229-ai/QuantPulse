@@ -10,6 +10,7 @@ interface HeaderProps {
   dailyPnL: number;
   equity: number;
   isStaleData: boolean;
+  maxDataStalenessMs: number;
   activeView: string;
 }
 
@@ -20,6 +21,7 @@ export const Header: React.FC<HeaderProps> = ({
   dailyPnL,
   equity,
   isStaleData,
+  maxDataStalenessMs,
 }) => {
   const isEmergency = killSwitchState.isEmergencyStopTripped || killSwitchState.isGlobalTradingOff;
 
@@ -90,7 +92,7 @@ export const Header: React.FC<HeaderProps> = ({
           <Activity className={`w-3.5 h-3.5 ${isStaleData ? 'text-rose-400' : 'text-emerald-400'}`} />
           <span className="text-slate-400">DATA FEED:</span>
           <span className={isStaleData ? 'text-rose-400 font-bold' : 'text-emerald-400 font-medium'}>
-            {isStaleData ? 'STALE (>3000ms)' : 'SIMULATED (FRESH)'}
+            {isStaleData ? `STALE (>${maxDataStalenessMs}ms)` : 'SIMULATED (FRESH)'}
           </span>
         </div>
       </div>
