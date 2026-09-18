@@ -112,6 +112,23 @@ assert(!maxNotionalVerdict.isApproved && maxNotionalVerdict.checks.some(c => c.c
 const maxNotionalPaperResult = executePaperOrder(maxNotionalOrder, INITIAL_PORTFOLIO_STATE, snapshot);
 assert(maxNotionalPaperResult.status === 'REJECTED' && maxNotionalPaperResult.rejectionReason?.includes('deterministic risk engine'), 'paper execution boundary independently enforces the deterministic risk gate');
 
+const concentrationSnapshot = { ...riskSafeSnapshot, lastPrice: 1000, bid: 999, ask: 1001 };
+const concentratedPortfolio = {
+  ...INITIAL_PORTFOLIO_STATE,
+  positions: [{
+    symbol: concentrationSnapshot.symbol, quantity: 20, averageEntryPrice: 1000, currentPrice: 1000,
+    marketValue: 20000, unrealizedPnL: 0, unrealizedPnLPct: 0, realizedPnL: 0,
+    stopLossPrice: 900, takeProfitPrice: 1200, notionalExposurePct: 20, highestPriceSinceEntry: 1000, openedAt: Date.now(),
+  }],
+  positionsCount: 1, portfolioExposurePct: 20,
+};
+const concentrationOrder: OrderRequest = {
+  ...baseOrder, id: 'SMOKE-CONCENTRATION-01', orderId: 'SMOKE-CONCENTRATION-01', clientOrderId: 'SMOKE-CONCENTRATION-CLI-01',
+  symbol: concentrationSnapshot.symbol, quantity: 10, estimatedPrice: 1001, stopLossPrice: 900, takeProfitPrice: 1200,
+};
+const concentrationVerdict = evaluateRiskGates(concentrationOrder, concentratedPortfolio, concentrationSnapshot);
+assert(!concentrationVerdict.isApproved && concentrationVerdict.checks.some(c => c.checkName === 'MAX_POSITION_PCT_OF_PORTFOLIO' && !c.passed), 'projected position concentration is rejected when an additional order would push an existing position above its configured limit');
+
 const customRiskConfig = { ...DEFAULT_RISK_CONFIG, maxPositionSizeNotional: 1 };
 const settingsDrivenVerdict = evaluateRiskGates(baseOrder, INITIAL_PORTFOLIO_STATE, snapshot, undefined, customRiskConfig);
 const invalidConfigVerdict = evaluateRiskGates(baseOrder, INITIAL_PORTFOLIO_STATE, snapshot, undefined, { ...DEFAULT_RISK_CONFIG, maxSpreadBps: Number.NaN });
