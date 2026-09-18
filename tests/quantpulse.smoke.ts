@@ -118,6 +118,12 @@ assert(!mismatchedSymbolVerdict.isApproved && mismatchedSymbolVerdict.checks.som
 const mismatchedPaperResult = executePaperOrder(baseOrder, INITIAL_PORTFOLIO_STATE, mismatchedSnapshot);
 assert(mismatchedPaperResult.status === 'REJECTED' && mismatchedPaperResult.rejectionReason?.includes('does not match'), 'paper execution rejects orders against a different market snapshot');
 
+const anomalySnapshot = generateMarketSnapshot('NIFTY50', snapshot.lastPrice, { injectAnomaly: true });
+const anomalyVerdict = evaluateRiskGates(baseOrder, INITIAL_PORTFOLIO_STATE, anomalySnapshot);
+assert(!anomalyVerdict.isApproved && anomalyVerdict.checks.some(c => c.checkName === 'ORDER_MARKET_SANITY' && !c.passed), 'risk engine rejects unvalidated market snapshots');
+const anomalyPaperResult = executePaperOrder(baseOrder, INITIAL_PORTFOLIO_STATE, anomalySnapshot);
+assert(anomalyPaperResult.status === 'REJECTED' && anomalyPaperResult.rejectionReason?.includes('not validated'), 'paper execution rejects unvalidated market snapshots');
+
 const invalidPortfolioVerdict = evaluateRiskGates(baseOrder, { ...INITIAL_PORTFOLIO_STATE, dayStartTimestamp: Number.NaN }, snapshot);
 assert(!invalidPortfolioVerdict.isApproved && invalidPortfolioVerdict.checks.some(c => c.checkName === 'ORDER_MARKET_SANITY' && !c.passed), 'risk engine fails closed on invalid portfolio state');
 let unsupportedSymbolRejected = false;
