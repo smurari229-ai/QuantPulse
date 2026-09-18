@@ -53,7 +53,7 @@ export const PaperTradingView: React.FC<PaperTradingViewProps> = ({ portfolio, r
     onRiskVerdictGenerated(verdict);
     if (!verdict.isApproved) { setExecutionLog(prev => [`[${new Date().toLocaleTimeString()}] REJECTED by Risk Engine: ${verdict.rejectionReasons.join('; ')}`, ...prev]); setIsSubmitting(false); return; }
     setTimeout(() => {
-      const result = executePaperOrder(proposedOrder, portfolio, marketSnapshot, { isExecutionHalted: killSwitchRef.current });
+      const result = executePaperOrder(proposedOrder, portfolio, marketSnapshot, { isExecutionHalted: killSwitchRef.current, riskConfig, riskContext });
       if (result.status === 'FILLED' && result.fill) {
         setExecutionLog(prev => [`[${new Date().toLocaleTimeString()}] FILLED: ${side} ${quantity} ${symbol} @ $${result.fill!.price.toFixed(2)} (Slippage: ${result.fill!.slippageIncurredBps} bps, Fees: $${result.totalCharges.toFixed(2)}) - Token: ${verdict.auditableRiskToken.slice(0, 10)}...`, ...prev]);
         onOrderExecuted(result.updatedPortfolio, proposedOrder);
