@@ -104,6 +104,9 @@ assert(!invalidOrderVerdict.isApproved && invalidOrderVerdict.rejectionReasons.s
 let unsupportedSymbolRejected = false;
 try { getLiveSnapshot('UNSUPPORTED', 100); } catch { unsupportedSymbolRejected = true; }
 assert(unsupportedSymbolRejected, 'unsupported market-data symbol is rejected');
+let invalidWalkForwardRejected = false;
+try { runFullBacktest(bars, { symbol: 'NIFTY50', initialCapital: 100000, outOfSampleSplitRatio: 0.2, positionSizingPct: 10, slippageBps: 5, commissionRatePct: 0.1, taxRatePct: 0, slippageModel: 'FIXED_BPS', enableWalkForward: true, walkForwardFolds: 1 } as BacktestParameters); } catch { invalidWalkForwardRejected = true; }
+assert(invalidWalkForwardRejected, 'invalid walk-forward fold count is rejected');
 assert(!settingsDrivenVerdict.isApproved, 'runtime risk evaluation enforces the supplied saved risk boundary');
 assert(settingsDrivenVerdict.rejectionReasons.some(reason => reason.includes('Position size exceeds $1')), 'runtime verdict reflects supplied saved notional boundary');
 
