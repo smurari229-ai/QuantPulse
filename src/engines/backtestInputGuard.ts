@@ -1,4 +1,7 @@
 import { OHLCV } from '../types/market';
+import { SUPPORTED_INSTRUMENTS } from './marketDataEngine';
+
+const SUPPORTED_SYMBOLS = SUPPORTED_INSTRUMENTS.map((instrument) => instrument.symbol);
 import { BacktestParameters, BacktestRunResult } from '../types/backtest';
 import { runFullBacktest } from './backtestingLab';
 
@@ -18,6 +21,7 @@ export function runDateScopedBacktest(
     );
   }
 
+  if (!SUPPORTED_SYMBOLS.includes(params.symbol)) throw new Error(`Unsupported backtest symbol: ${params.symbol}`);
   const start = parseDateBoundary(params.startDate);
   const endStart = parseDateBoundary(params.endDate);
   if (start === null || endStart === null) {
