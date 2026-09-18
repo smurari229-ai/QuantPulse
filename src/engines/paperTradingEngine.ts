@@ -1,5 +1,7 @@
 import { OrderRequest, OrderFill, Position, PortfolioState } from '../types/order';
 import { MarketDataSnapshot } from '../types/market';
+import { evaluateRiskGates, DEFAULT_RISK_CONFIG, RecentOrderContext } from './riskEngine';
+import { RiskEngineConfig } from '../types/risk';
 
 export interface PaperSimulationResult {
   order: OrderRequest;
@@ -33,9 +35,11 @@ function secureBrokerOrderId(): string {
   return `MOCK-BRK-${(values[0] % 900000 + 100000).toString()}`;
 }
 
-export function executePaperOrder(order: OrderRequest, currentPortfolio: PortfolioState, marketSnapshot: MarketDataSnapshot, options?: { simulatedLatencyMs?: number; customSlippageBps?: number; isExecutionHalted?: boolean }): PaperSimulationResult {
+export function executePaperOrder(order: OrderRequest, currentPortfolio: PortfolioState, marketSnapshot: MarketDataSnapshot, options?: { simulatedLatencyMs?: number; customSlippageBps?: number; isExecutionHalted?: boolean; riskConfig?: RiskEngineConfig; riskContext?: Partial<RecentOrderContext> }): PaperSimulationResult {
   if (options?.isExecutionHalted) return reject(order, currentPortfolio, 'Paper execution is halted by the active kill switch.');
   if (order.executionMode !== 'PAPER') return reject(order, currentPortfolio, 'Paper simulator accepts PAPER execution mode only; live/offline routing is blocked.');
+  const riskVerdict = evaluateRiskGates(order, currentPortfolio, marketSnapshot, options?.riskContext, options?.riskConfig ?? DEFAULT_RISK_CONFIG);
+  if (!riskVerdict.isApproved) return reject(order, currentPortfolio, `Paper order rejected by deterministic risk engine: ${riskVerdict.rejectionReasons.join(' | ')}`);
   if (order.side !== 'BUY' && order.side !== 'SELL') return reject(order, currentPortfolio, 'Order side must be BUY or SELL.');
   if (order.type !== 'MARKET' && order.type !== 'LIMIT' && order.type !== 'STOP_MARKET') return reject(order, currentPortfolio, 'Unsupported order type.');
   if (!Number.isFinite(order.quantity) || order.quantity <= 0) return reject(order, currentPortfolio, 'Order quantity must be a positive finite number.');
