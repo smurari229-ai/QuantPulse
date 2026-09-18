@@ -2,6 +2,9 @@ type ApiRequest = { method?: string; body?: unknown };
 type ApiResponse = { status: (code: number) => ApiResponse; json: (body: unknown) => unknown; setHeader: (name: string, value: string) => void };
 
 const MAX_INPUT_BYTES = 100_000;
+const MAX_AI_RESPONSE_BYTES = 20_000;
+const MAX_LIST_ITEMS = 20;
+const MAX_LIST_ITEM_LENGTH = 500;
 import { GoogleGenAI } from '@google/genai';
 
 const SIGNALS = new Set(['BUY', 'SELL', 'HOLD', 'NO_TRADE']);
@@ -16,9 +19,9 @@ function validateDecision(value: unknown) {
   if (!SIGNALS.has(String(d.signal))) throw new Error('AI response contains an invalid signal.');
   if (!isFiniteNumber(d.confidence) || d.confidence < 0 || d.confidence > 1) throw new Error('AI confidence must be between 0 and 1.');
   if (typeof d.reasoning !== 'string' || d.reasoning.length === 0 || d.reasoning.length > 4000) throw new Error('AI reasoning is invalid.');
-  if (typeof d.strategy !== 'string' || d.strategy.length > 200) throw new Error('AI strategy is invalid.');
-  if (!Array.isArray(d.risk_flags) || !d.risk_flags.every((x) => typeof x === 'string')) throw new Error('AI risk flags are invalid.');
-  if (!Array.isArray(d.required_checks) || !d.required_checks.every((x) => typeof x === 'string')) throw new Error('AI required checks are invalid.');
+  if (typeof d.strategy !== 'string' || d.strategy.trim().length === 0 || d.strategy.length > 200) throw new Error('AI strategy is invalid.');
+  if (!Array.isArray(d.risk_flags) || d.risk_flags.length > MAX_LIST_ITEMS || !d.risk_flags.every((x) => typeof x === 'string' && x.length <= MAX_LIST_ITEM_LENGTH)) throw new Error('AI risk flags are invalid.');
+  if (!Array.isArray(d.required_checks) || d.required_checks.length > MAX_LIST_ITEMS || !d.required_checks.every((x) => typeof x === 'string' && x.length <= MAX_LIST_ITEM_LENGTH)) throw new Error('AI required checks are invalid.');
   return d;
 }
 
@@ -54,7 +57,9 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       config: { responseMimeType: 'application/json' },
     });
 
-    const parsed = JSON.parse(response.text ?? '{}');
+    const responseText = response.text ?? '{}';
+    if (responseText.length > MAX_AI_RESPONSE_BYTES) throw new Error('AI response is too large.');
+    const parsed = JSON.parse(responseText);
     const decision = validateDecision(parsed);
     return res.status(200).json({
       signal: decision.signal,
