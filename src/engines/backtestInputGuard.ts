@@ -29,9 +29,10 @@ export function runDateScopedBacktest(
     throw new Error('Backtest startDate must be before endDate.');
   }
 
-  const scopedBars = bars.filter(
-    (bar) => Number.isFinite(bar.timestamp) && bar.timestamp >= start && bar.timestamp < endExclusive
-  );
+  const scopedBars = bars
+    .filter((bar) => Number.isFinite(bar.timestamp) && Number.isFinite(bar.open) && Number.isFinite(bar.high) && Number.isFinite(bar.low) && Number.isFinite(bar.close) && Number.isFinite(bar.volume))
+    .filter((bar) => bar.timestamp >= start && bar.timestamp < endExclusive)
+    .sort((a, b) => a.timestamp - b.timestamp);
 
   if (scopedBars.length === 0) {
     throw new Error('No market bars fall inside the selected backtest date range.');
