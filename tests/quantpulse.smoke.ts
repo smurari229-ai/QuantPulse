@@ -1,3 +1,4 @@
+import { BLOCKED_LIVE_BROKER_ADAPTER } from '../src/engines/liveBrokerAdapter';
 import { generateSyntheticDailyBars, generateMarketSnapshot, getLiveSnapshot, validateMarketDataSeries } from '../src/engines/marketDataEngine';
 import { evaluateRiskGates, DEFAULT_RISK_CONFIG } from '../src/engines/riskEngine';
 import { INITIAL_PORTFOLIO_STATE, executePaperOrder } from '../src/engines/paperTradingEngine';
@@ -239,3 +240,14 @@ assert(invalidCommissionRejected, 'non-finite commission configuration is reject
 
 console.log('QUANTPULSE SMOKE TESTS: PASS');
 console.log(JSON.stringify({ bars: bars.length, trades: backtest.trades.length, oosTrades: backtest.outOfSampleMetrics.totalTrades, walkForwardFolds: backtest.walkForwardResults.length }, null, 2));
+
+
+const liveHealth = await BLOCKED_LIVE_BROKER_ADAPTER.getHealth();
+assert(liveHealth.liveTradingAuthorized === false, 'Live broker adapter must remain unauthorized by default');
+let liveSubmitBlocked = false;
+try {
+  await BLOCKED_LIVE_BROKER_ADAPTER.submitOrder({} as any);
+} catch (error) {
+  liveSubmitBlocked = String(error).includes('LIVE_ORDER_BLOCKED');
+}
+assert(liveSubmitBlocked, 'Live broker adapter must fail closed without authorization');
