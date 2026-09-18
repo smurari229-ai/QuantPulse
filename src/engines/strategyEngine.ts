@@ -57,6 +57,33 @@ export function evaluateStrategySignal(strategy: StrategyDefinition, symbol: str
   const currentEma50 = ema50[currentIndex];
   const currentAtr = atr[currentIndex];
   const currentBb = bollinger[currentIndex];
+
+  if (
+    !Number.isFinite(currentRsi) ||
+    !Number.isFinite(currentEma20) ||
+    !Number.isFinite(currentEma50) ||
+    !Number.isFinite(currentAtr) ||
+    currentAtr <= 0 ||
+    !currentBb ||
+    !Number.isFinite(currentBb.lower) ||
+    !Number.isFinite(currentBb.middle) ||
+    !Number.isFinite(currentBb.upper)
+  ) {
+    return {
+      strategyId: strategy.id,
+      symbol,
+      timestamp,
+      signal: 'NO_TRADE',
+      suggestedEntry: currentPrice,
+      suggestedStopLoss: currentPrice,
+      suggestedTakeProfit: currentPrice,
+      riskRewardRatio: 0,
+      targetQuantity: 0,
+      indicatorsSnapshot: indicators,
+      rationale: 'Required indicator values are unavailable or invalid; strategy evaluation halted safely.',
+    };
+  }
+
   const regimeAllowsMeanReversion = indicators.marketRegime === 'MEAN_REVERTING_RANGE' || indicators.marketRegime === 'LOW_VOLATILITY_CONSOLIDATION';
 
   if (strategy.id === 'TF_EMA_CROSS') {
