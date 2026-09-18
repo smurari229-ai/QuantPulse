@@ -1,5 +1,7 @@
 type ApiRequest = { method?: string; body?: unknown };
 type ApiResponse = { status: (code: number) => ApiResponse; json: (body: unknown) => unknown; setHeader: (name: string, value: string) => void };
+
+const MAX_INPUT_BYTES = 100_000;
 import { GoogleGenAI } from '@google/genai';
 
 const SIGNALS = new Set(['BUY', 'SELL', 'HOLD', 'NO_TRADE']);
@@ -31,6 +33,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
 
   try {
     const body = (req.body && typeof req.body === 'object') ? req.body as Record<string, unknown> : {};
+    if (JSON.stringify(body).length > MAX_INPUT_BYTES) return res.status(413).json({ error: 'AI request payload is too large.' });
     const rawInput = body.input;
     if (!rawInput || typeof rawInput !== 'object') return res.status(400).json({ error: 'Missing AI feature input.' });
     const input = rawInput as Record<string, any>;
