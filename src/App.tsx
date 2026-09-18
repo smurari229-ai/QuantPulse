@@ -89,7 +89,7 @@ export default function App() {
       executionMode: 'PAPER', timestamp: Date.now(),
     };
     setCurrentVerdict(evaluateRiskGates(dummyOrder, portfolio, marketSnapshot, riskContext, DEFAULT_RISK_CONFIG));
-  }, [selectedSymbol, marketSnapshot, portfolio, riskContext, riskConfigRevision]);
+  }, [selectedSymbol, marketSnapshot, portfolio, riskContext, riskConfig]);
 
   const handleSelectSymbol = useCallback((newSymbol: string) => {
     setSelectedSymbol(newSymbol);
