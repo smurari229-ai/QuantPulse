@@ -33,7 +33,8 @@ function secureBrokerOrderId(): string {
   return `MOCK-BRK-${(values[0] % 900000 + 100000).toString()}`;
 }
 
-export function executePaperOrder(order: OrderRequest, currentPortfolio: PortfolioState, marketSnapshot: MarketDataSnapshot, options?: { simulatedLatencyMs?: number; customSlippageBps?: number }): PaperSimulationResult {
+export function executePaperOrder(order: OrderRequest, currentPortfolio: PortfolioState, marketSnapshot: MarketDataSnapshot, options?: { simulatedLatencyMs?: number; customSlippageBps?: number; isExecutionHalted?: boolean }): PaperSimulationResult {
+  if (options?.isExecutionHalted) return reject(order, currentPortfolio, 'Paper execution is halted by the active kill switch.');
   if (order.executionMode !== 'PAPER') return reject(order, currentPortfolio, 'Paper simulator accepts PAPER execution mode only; live/offline routing is blocked.');
   if (order.side !== 'BUY' && order.side !== 'SELL') return reject(order, currentPortfolio, 'Order side must be BUY or SELL.');
   if (order.type !== 'MARKET' && order.type !== 'LIMIT' && order.type !== 'STOP_MARKET') return reject(order, currentPortfolio, 'Unsupported order type.');
