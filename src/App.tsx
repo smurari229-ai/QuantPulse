@@ -77,7 +77,7 @@ export default function App() {
 
   const [currentVerdict, setCurrentVerdict] = useState<RiskValidationVerdict>(() => {
     const dummyOrder: OrderRequest = { id: 'INIT-AUDIT-01', orderId: 'INIT-AUDIT-01', clientOrderId: 'CLI-INIT-01', symbol: selectedSymbol, side: 'BUY', type: 'MARKET', quantity: 10, limitPrice: marketSnapshot.lastPrice, stopLossPrice: Math.round(marketSnapshot.lastPrice * 0.96), takeProfitPrice: Math.round(marketSnapshot.lastPrice * 1.08), executionMode: 'PAPER', timestamp: Date.now() };
-    return evaluateRiskGates(dummyOrder, INITIAL_PORTFOLIO_STATE, marketSnapshot, { isEmergencyKillSwitchActive: killActive }, DEFAULT_RISK_CONFIG);
+    return evaluateRiskGates(dummyOrder, INITIAL_PORTFOLIO_STATE, marketSnapshot, { isEmergencyKillSwitchActive: killActive }, riskConfig);
   });
 
   useEffect(() => {
