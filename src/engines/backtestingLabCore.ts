@@ -34,6 +34,10 @@ export function runFullBacktest(
     throw new Error('taxRatePct must be a finite non-negative number.');
   }
 
+  if (!Number.isFinite(params.initialCapital) || !Number.isFinite(params.positionSizingPct) || !Number.isInteger(params.walkForwardFolds) || params.walkForwardFolds < 2 || params.walkForwardFolds > 10) {
+    throw new Error('Backtest numeric parameters or walk-forward fold configuration is invalid.');
+  }
+
   const splitIndex = Math.min(
     Math.max(Math.floor(bars.length * (1 - params.outOfSampleSplitRatio)), 1),
     Math.max(bars.length - 1, 1)
