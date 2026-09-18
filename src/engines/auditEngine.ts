@@ -22,6 +22,22 @@ function fastHash(str: string): string {
 
 const INITIAL_GENESIS_HASH = '0x0000000000000000000000000000000000000000000000000000000000000000';
 
+function sanitizeAuditValue(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map((item) => sanitizeAuditValue(item));
+  if (value && typeof value === 'object') {
+    const result: Record<string, unknown> = {};
+    for (const [key, nestedValue] of Object.entries(value as Record<string, unknown>)) {
+      if (/(api[_-]?key|api[_-]?secret|password|passwd|secret|token|authorization|access[_-]?token|refresh[_-]?token|private[_-]?key)/i.test(key)) {
+        result[key] = '[REDACTED]';
+      } else {
+        result[key] = sanitizeAuditValue(nestedValue);
+      }
+    }
+    return result;
+  }
+  return value;
+}
+
 export class AuditLogChain {
   private records: AuditRecord[] = [];
   private sequenceCounter = 0;
@@ -47,12 +63,8 @@ export class AuditLogChain {
     const now = Date.now();
     const previousHash = this.records.length > 0 ? this.records[this.records.length - 1].recordHash : INITIAL_GENESIS_HASH;
 
-    // Sanitize secrets from details (Rule 8: Never log secrets)
-    const sanitizedDetails = { ...details };
-    delete (sanitizedDetails as any).apiKey;
-    delete (sanitizedDetails as any).apiSecret;
-    delete (sanitizedDetails as any).token;
-    delete (sanitizedDetails as any).brokerPassword;
+    // Sanitize secrets from details (Rule 8: Never log secrets), including nested payloads.
+    const sanitizedDetails = sanitizeAuditValue(details) as Record<string, unknown>;
 
     const payload = `${this.sequenceCounter}:${now}:${eventType}:${sourceModule}:${JSON.stringify(sanitizedDetails)}:${previousHash}`;
     const recordHash = fastHash(payload);
