@@ -36,7 +36,8 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
 
   try {
     const body = (req.body && typeof req.body === 'object') ? req.body as Record<string, unknown> : {};
-    if (JSON.stringify(body).length > MAX_INPUT_BYTES) return res.status(413).json({ error: 'AI request payload is too large.' });
+    const bodyJson = JSON.stringify(body);
+    if (new TextEncoder().encode(bodyJson).byteLength > MAX_INPUT_BYTES) return res.status(413).json({ error: 'AI request payload is too large.' });
     const rawInput = body.input;
     if (!rawInput || typeof rawInput !== 'object') return res.status(400).json({ error: 'Missing AI feature input.' });
     const input = rawInput as Record<string, any>;
@@ -58,7 +59,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     });
 
     const responseText = response.text ?? '{}';
-    if (responseText.length > MAX_AI_RESPONSE_BYTES) throw new Error('AI response is too large.');
+    if (new TextEncoder().encode(responseText).byteLength > MAX_AI_RESPONSE_BYTES) throw new Error('AI response is too large.');
     const parsed = JSON.parse(responseText);
     const decision = validateDecision(parsed);
     return res.status(200).json({
