@@ -1,13 +1,14 @@
 import React, { useState } from 'react';
 import { PortfolioState, OrderRequest, RiskValidationVerdict } from '../../types/order';
 import { MarketDataSnapshot } from '../../types/market';
+import { RiskEngineConfig } from '../../types/risk';
 import { evaluateRiskGates } from '../../engines/riskEngine';
 import { triggerEmergencyKillSwitch, KillSwitchState } from '../../engines/killSwitchEngine';
 import { Flame, Play, RefreshCw } from 'lucide-react';
 
-interface FailureSimulatorViewProps { portfolio: PortfolioState; marketSnapshot: MarketDataSnapshot; onUpdateSnapshot: (snap: MarketDataSnapshot) => void; onUpdateKillSwitch: (ks: KillSwitchState) => void; onRiskVerdictGenerated: (verdict: RiskValidationVerdict) => void; }
+interface FailureSimulatorViewProps { riskConfig: RiskEngineConfig; portfolio: PortfolioState; marketSnapshot: MarketDataSnapshot; onUpdateSnapshot: (snap: MarketDataSnapshot) => void; onUpdateKillSwitch: (ks: KillSwitchState) => void; onRiskVerdictGenerated: (verdict: RiskValidationVerdict) => void; }
 
-export const FailureSimulatorView: React.FC<FailureSimulatorViewProps> = ({ portfolio, marketSnapshot, onUpdateSnapshot, onUpdateKillSwitch, onRiskVerdictGenerated }) => {
+export const FailureSimulatorView: React.FC<FailureSimulatorViewProps> = ({ riskConfig, portfolio, marketSnapshot, onUpdateSnapshot, onUpdateKillSwitch, onRiskVerdictGenerated }) => {
   const [activeScenario, setActiveScenario] = useState<string | null>(null);
   const [simLogs, setSimLogs] = useState<string[]>([]);
   const makeOrder = (overrides: Partial<OrderRequest> = {}): OrderRequest => ({ id: `SIM-ORD-${Date.now().toString().slice(-6)}`, orderId: `SIM-ORD-${Date.now().toString().slice(-6)}`, clientOrderId: `CLI-SIM-${Date.now()}`, symbol: marketSnapshot.symbol, side: 'BUY', type: 'MARKET', quantity: 2, limitPrice: marketSnapshot.lastPrice, stopLossPrice: marketSnapshot.lastPrice * 0.95, takeProfitPrice: marketSnapshot.lastPrice * 1.05, executionMode: 'PAPER', timestamp: Date.now(), ...overrides });
@@ -16,14 +17,14 @@ export const FailureSimulatorView: React.FC<FailureSimulatorViewProps> = ({ port
     setActiveScenario(scenarioId);
     if (scenarioId === 'STALE_DATA') {
       const stale = { ...marketSnapshot, timestamp: Date.now() - 5200, dataQuality: { ...marketSnapshot.dataQuality, latencyMs: 5200, isStale: true } };
-      onUpdateSnapshot(stale); onRiskVerdictGenerated(evaluateRiskGates(makeOrder(), portfolio, stale)); log('INJECTED: 5200ms stale feed. Risk engine should reject the order.');
+      onUpdateSnapshot(stale); onRiskVerdictGenerated(evaluateRiskGates(makeOrder(), portfolio, stale, undefined, riskConfig)); log('INJECTED: 5200ms stale feed. Risk engine should reject the order.');
     } else if (scenarioId === 'EXCESS_SIZE') {
-      const order = makeOrder({ quantity: 50 }); const verdict = evaluateRiskGates(order, portfolio, marketSnapshot); onRiskVerdictGenerated(verdict); log(`INJECTED: oversized order ($${(50 * marketSnapshot.lastPrice).toFixed(0)} notional). Risk engine should reject it.`);
+      const order = makeOrder({ quantity: 50 }); const verdict = evaluateRiskGates(order, portfolio, marketSnapshot, undefined, riskConfig); onRiskVerdictGenerated(verdict); log(`INJECTED: oversized order ($${(50 * marketSnapshot.lastPrice).toFixed(0)} notional). Risk engine should reject it.`);
     } else if (scenarioId === 'MISSING_STOP_LOSS') {
-      const verdict = evaluateRiskGates(makeOrder({ quantity: 5, stopLossPrice: 0 }), portfolio, marketSnapshot); onRiskVerdictGenerated(verdict); log('INJECTED: order with stop-loss = 0. Mandatory stop-loss gate should reject it.');
+      const verdict = evaluateRiskGates(makeOrder({ quantity: 5, stopLossPrice: 0 }), portfolio, marketSnapshot, undefined, riskConfig); onRiskVerdictGenerated(verdict); log('INJECTED: order with stop-loss = 0. Mandatory stop-loss gate should reject it.');
     } else if (scenarioId === 'DAILY_LOSS_BREACH') {
       const lossEquity = portfolio.dayStartEquity > 0 ? portfolio.dayStartEquity * 0.965 : portfolio.equity * 0.965;
-      const lossPortfolio = { ...portfolio, equity: lossEquity, dailyPnL: lossEquity - portfolio.dayStartEquity, dailyPnLPct: -3.5 }; const verdict = evaluateRiskGates(makeOrder(), lossPortfolio, marketSnapshot); onRiskVerdictGenerated(verdict); log('INJECTED: daily loss -3.5%. Daily loss circuit breaker should reject new orders.');
+      const lossPortfolio = { ...portfolio, equity: lossEquity, dailyPnL: lossEquity - portfolio.dayStartEquity, dailyPnLPct: -3.5 }; const verdict = evaluateRiskGates(makeOrder(), lossPortfolio, marketSnapshot, undefined, riskConfig); onRiskVerdictGenerated(verdict); log('INJECTED: daily loss -3.5%. Daily loss circuit breaker should reject new orders.');
     } else if (scenarioId === 'EMERGENCY_STOP_SIM') {
       onUpdateKillSwitch(triggerEmergencyKillSwitch('Automated simulation failure test')); log('TRIGGERED: emergency kill switch. Paper order routing is now blocked until reset.');
     }
