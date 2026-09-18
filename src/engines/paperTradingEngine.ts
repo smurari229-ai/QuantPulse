@@ -27,8 +27,16 @@ function isSameLocalCalendarDay(a: number, b: number): boolean {
     && first.getDate() === second.getDate();
 }
 
+function secureBrokerOrderId(): string {
+  const values = new Uint32Array(1);
+  globalThis.crypto.getRandomValues(values);
+  return `MOCK-BRK-${(values[0] % 900000 + 100000).toString()}`;
+}
+
 export function executePaperOrder(order: OrderRequest, currentPortfolio: PortfolioState, marketSnapshot: MarketDataSnapshot, options?: { simulatedLatencyMs?: number; customSlippageBps?: number }): PaperSimulationResult {
-  if (order.executionMode === 'LIVE_BLOCKED') return reject(order, currentPortfolio, 'Direct Live Execution is strictly blocked by platform governance.');
+  if (order.executionMode !== 'PAPER') return reject(order, currentPortfolio, 'Paper simulator accepts PAPER execution mode only; live/offline routing is blocked.');
+  if (order.side !== 'BUY' && order.side !== 'SELL') return reject(order, currentPortfolio, 'Order side must be BUY or SELL.');
+  if (order.type !== 'MARKET' && order.type !== 'LIMIT' && order.type !== 'STOP_MARKET') return reject(order, currentPortfolio, 'Unsupported order type.');
   if (!Number.isFinite(order.quantity) || order.quantity <= 0) return reject(order, currentPortfolio, 'Order quantity must be a positive finite number.');
   if (marketSnapshot.bid <= 0 || marketSnapshot.ask <= 0 || marketSnapshot.ask < marketSnapshot.bid) return reject(order, currentPortfolio, 'Invalid market bid/ask data.');
 
@@ -77,7 +85,7 @@ export function executePaperOrder(order: OrderRequest, currentPortfolio: Portfol
   const fill: OrderFill = {
     fillId: `FILL-PAPER-${now.toString(36).toUpperCase()}`, orderId: order.id, symbol: order.symbol, side: order.side,
     quantity: order.quantity, price: fillPrice, slippageIncurredBps: slippageBps, slippageBps, brokerFee, brokerageFee: brokerFee,
-    exchangeFee, taxesApplicable, totalCharges, timestamp: now, brokerOrderId: `MOCK-BRK-${Math.floor(Math.random() * 899999 + 100000)}`,
+    exchangeFee, taxesApplicable, totalCharges, timestamp: now, brokerOrderId: secureBrokerOrderId(),
   };
 
   const positions: Position[] = currentPortfolio.positions.map(p => ({ ...p }));
