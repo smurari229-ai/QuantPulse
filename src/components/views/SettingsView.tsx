@@ -14,7 +14,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   onUpdateExecutionMode,
   onRiskConfigSaved,
 }) => {
-  const [config, setConfig] = useState<RiskEngineConfig>({ ...DEFAULT_RISK_CONFIG });
+  const [config, setConfig] = useState<RiskEngineConfig>({ ...riskConfig });
   const [isSaved, setIsSaved] = useState<boolean>(false);
   const [validationError, setValidationError] = useState<string>('');
 
