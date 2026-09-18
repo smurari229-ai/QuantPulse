@@ -197,6 +197,8 @@ const tamperRecord = auditLedger.getAllRecords(2)[0];
 tamperRecord.details.symbol = 'TAMPERED';
 assert(!auditLedger.verifyChainIntegrity(), 'audit chain detects record tampering');
 
+const directBuyRiskVerdict = evaluateRiskGates(baseOrder, INITIAL_PORTFOLIO_STATE, snapshot);
+assert(directBuyRiskVerdict.isApproved, `baseline paper BUY risk preflight approves: ${directBuyRiskVerdict.rejectionReasons.join(' | ')}`);
 const buyResult = executePaperOrder(baseOrder, INITIAL_PORTFOLIO_STATE, snapshot);
 assert(buyResult.status === 'FILLED' && buyResult.updatedPortfolio.positions.length === 1, 'paper BUY creates a position');
 const held = buyResult.updatedPortfolio.positions[0];
