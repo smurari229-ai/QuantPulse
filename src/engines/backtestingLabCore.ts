@@ -43,7 +43,12 @@ export function runFullBacktest(
   // Simulate the complete series once so indicator warm-up is continuous across
   // the IS/OOS boundary. Trades are classified by their entry timestamp.
   const allTrades = simulateBars(bars, params, splitTimestamp);
-  const inSampleTrades = allTrades.filter((t) => !t.isOutOfSample);
+  // A trade entered before the IS/OOS boundary but exited inside OOS uses
+  // future information for its realized P&L. Keep it in the combined run,
+  // but exclude it from both segmented metric sets to preserve OOS purity.
+  const inSampleTrades = allTrades.filter(
+    (t) => !t.isOutOfSample && t.exitTimestamp < splitTimestamp
+  );
   const outOfSampleTrades = allTrades.filter((t) => t.isOutOfSample);
 
   const inSampleBars = bars.slice(0, splitIndex);
