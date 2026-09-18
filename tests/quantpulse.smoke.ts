@@ -162,6 +162,14 @@ const unsupportedStopOrder: OrderRequest = { ...baseOrder, id: 'SMOKE-STOP-01', 
 const unsupportedStop = executePaperOrder(unsupportedStopOrder, INITIAL_PORTFOLIO_STATE, snapshot);
 assert(unsupportedStop.status === 'REJECTED' && unsupportedStop.rejectionReason?.includes('STOP_MARKET'), 'unsupported stop-market order is rejected explicitly');
 
+const nonPaperOrder = { ...baseOrder, executionMode: 'OFFLINE' as const };
+const nonPaperResult = executePaperOrder(nonPaperOrder, INITIAL_PORTFOLIO_STATE, snapshot);
+assert(nonPaperResult.status === 'REJECTED' && nonPaperResult.rejectionReason?.includes('PAPER execution mode'), 'non-PAPER execution mode is rejected by the paper engine');
+
+const invalidSideOrder = { ...baseOrder, side: 'HOLD' as never };
+const invalidSideResult = executePaperOrder(invalidSideOrder, INITIAL_PORTFOLIO_STATE, snapshot);
+assert(invalidSideResult.status === 'REJECTED' && invalidSideResult.rejectionReason?.includes('side must be BUY or SELL'), 'invalid runtime order side is rejected');
+
 const params: BacktestParameters = {
   strategyId: 'TF_EMA_CROSS', symbol: 'NIFTY50',
   startDate: new Date(bars[0].timestamp).toISOString(),
@@ -174,6 +182,11 @@ const backtest = runFullBacktest(bars, params);
 assert(backtest.equityCurve.length === bars.length, 'backtest equity curve covers all bars');
 assert(backtest.trades.every(t => t.entryTimestamp <= t.exitTimestamp), 'backtest trade timestamps are ordered');
 assert(backtest.outOfSampleMetrics.totalTrades === backtest.trades.filter(t => t.isOutOfSample).length, 'OOS metrics match OOS trade classification');
+const splitTimestamp = bars[Math.floor(bars.length * (1 - params.outOfSampleSplitRatio))].timestamp;
+assert(
+  backtest.inSampleMetrics.totalTrades === backtest.trades.filter(t => !t.isOutOfSample && t.exitTimestamp < splitTimestamp).length,
+  'in-sample metrics exclude trades whose exit crosses into OOS'
+);
 assert(backtest.walkForwardResults.length <= params.walkForwardFolds, 'walk-forward result count respects requested folds');
 assert(backtest.equityCurve.every(point => Number.isFinite(point.equity) && Number.isFinite(point.drawdownPct)), 'equity curve values remain finite');
 
