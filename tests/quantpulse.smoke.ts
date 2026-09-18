@@ -2,7 +2,7 @@ import { BLOCKED_LIVE_BROKER_ADAPTER } from '../src/engines/liveBrokerAdapter';
 import { generateSyntheticDailyBars, generateMarketSnapshot, getLiveSnapshot, validateMarketDataSeries } from '../src/engines/marketDataEngine';
 import { evaluateRiskGates, DEFAULT_RISK_CONFIG } from '../src/engines/riskEngine';
 import { INITIAL_PORTFOLIO_STATE, executePaperOrder } from '../src/engines/paperTradingEngine';
-import { triggerEmergencyKillSwitch, resetKillSwitchWithVerification } from '../src/engines/killSwitchEngine';
+import { triggerEmergencyKillSwitch, resetKillSwitchWithVerification, canSubmitOrders } from '../src/engines/killSwitchEngine';
 import { runFullBacktest } from '../src/engines/backtestingLab';
 import { evaluateStrategySignal, REGISTERED_STRATEGIES } from '../src/engines/strategyEngine';
 import { AuditLogChain } from '../src/engines/auditEngine';
@@ -183,6 +183,8 @@ const badReset = resetKillSwitchWithVerification(killState, 'WRONG');
 assert(!badReset.success && badReset.updatedState.isEmergencyStopTripped, 'wrong reset code keeps kill switch engaged');
 const goodReset = resetKillSwitchWithVerification(killState, killState.resetConfirmationCode);
 assert(goodReset.success && !goodReset.updatedState.isEmergencyStopTripped, 'correct reset code re-arms sandbox');
+const paperOnlyState = { ...goodReset.updatedState, isPaperOnlyLocked: true };
+assert(!canSubmitOrders(paperOnlyState).allowed && canSubmitOrders(paperOnlyState).reason === 'PAPER_ONLY_LOCK_ACTIVE', 'paper-only lock blocks order submission even when other kill-switch flags are clear');
 
 const auditLedger = new AuditLogChain();
 const auditRecord = auditLedger.appendRecord(
