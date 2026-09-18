@@ -123,7 +123,7 @@ export default function App() {
         {activeView === 'roadmap' && <ArchitectureRoadmapView />}
         {activeView === 'system_design' && <SystemDesignDocsView />}
         {activeView === 'testing' && <TestingMatrixView />}
-        {activeView === 'settings' && <SettingsView executionMode={executionMode} onUpdateExecutionMode={setExecutionMode} onRiskConfigSaved={() => setRiskConfigRevision((revision) => revision + 1)} />}
+        {activeView === 'settings' && <SettingsView executionMode={executionMode} riskConfig={riskConfig} onUpdateExecutionMode={setExecutionMode} onRiskConfigSaved={(nextConfig) => setRiskConfig({ ...nextConfig })} />}
       </div></main>
     </div>
   </div>;
