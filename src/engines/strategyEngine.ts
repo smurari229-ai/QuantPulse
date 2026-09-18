@@ -31,6 +31,22 @@ export const REGISTERED_STRATEGIES: StrategyDefinition[] = [
 
 export function evaluateStrategySignal(strategy: StrategyDefinition, symbol: string, bars: OHLCV[]): StrategySignalOutput {
   if (bars.length === 0) throw new Error('Strategy evaluation requires at least one OHLCV bar.');
+  if (!REGISTERED_STRATEGIES.some((registered) => registered.id === strategy.id)) {
+    const lastBar = bars[bars.length - 1];
+    return {
+      strategyId: strategy.id,
+      symbol,
+      timestamp: lastBar.timestamp,
+      signal: 'NO_TRADE',
+      suggestedEntry: lastBar.close,
+      suggestedStopLoss: lastBar.close,
+      suggestedTakeProfit: lastBar.close,
+      riskRewardRatio: 0,
+      targetQuantity: 0,
+      indicatorsSnapshot: analyzeMarketFeatures(bars),
+      rationale: `Unsupported strategy ID "${strategy.id}". Strategy evaluation halted safely.`,
+    };
+  }
 
   const indicators = analyzeMarketFeatures(bars);
   const closes = bars.map((bar) => bar.close);
