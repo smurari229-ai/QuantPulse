@@ -25,6 +25,9 @@ assert(validateMarketDataSeries(bars).isValid, 'generated market data passes val
 let invalidGeneratorRejected = false;
 try { generateSyntheticDailyBars('NIFTY50', 0); } catch { invalidGeneratorRejected = true; }
 assert(invalidGeneratorRejected, 'invalid synthetic bar count is rejected');
+let unsupportedGeneratorRejected = false;
+try { generateSyntheticDailyBars('UNSUPPORTED', 10); } catch { unsupportedGeneratorRejected = true; }
+assert(unsupportedGeneratorRejected, 'unsupported market-data symbol is rejected by the historical generator');
 let invalidVolatilityRejected = false;
 try { generateSyntheticDailyBars('NIFTY50', 10, undefined, 0); } catch { invalidVolatilityRejected = true; }
 assert(invalidVolatilityRejected, 'zero synthetic volatility is rejected');
@@ -237,6 +240,9 @@ assert(invalidCostRejected, 'negative slippage configuration is rejected');
 let invalidCommissionRejected = false;
 try { runFullBacktest(bars, { ...params, commissionRatePct: Number.NaN }); } catch { invalidCommissionRejected = true; }
 assert(invalidCommissionRejected, 'non-finite commission configuration is rejected');
+let unsupportedPublicBacktestRejected = false;
+try { runFullBacktest(bars, { ...params, symbol: 'UNSUPPORTED' as any }); } catch { unsupportedPublicBacktestRejected = true; }
+assert(unsupportedPublicBacktestRejected, 'public backtest entry rejects unsupported symbols');
 
 console.log('QUANTPULSE SMOKE TESTS: PASS');
 console.log(JSON.stringify({ bars: bars.length, trades: backtest.trades.length, oosTrades: backtest.outOfSampleMetrics.totalTrades, walkForwardFolds: backtest.walkForwardResults.length }, null, 2));
