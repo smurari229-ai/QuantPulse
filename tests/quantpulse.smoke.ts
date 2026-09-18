@@ -73,6 +73,8 @@ const malformedOrder = { ...baseOrder, quantity: -1 };
 const malformedVerdict = evaluateRiskGates(malformedOrder, INITIAL_PORTFOLIO_STATE, snapshot);
 assert(!malformedVerdict.isApproved, 'negative order quantity is rejected');
 assert(malformedVerdict.checks.some(c => c.checkName === 'ORDER_MARKET_SANITY' && !c.passed), 'order sanity gate rejects malformed quantity');
+const invalidPaperOrder = executePaperOrder({ ...baseOrder, timestamp: Number.NaN }, INITIAL_PORTFOLIO_STATE, snapshot);
+assert(invalidPaperOrder.status === 'REJECTED' && invalidPaperOrder.rejectionReason?.includes('timestamp'), 'paper execution rejects invalid order timestamp');
 
 const invalidEstimatedPriceOrder = { ...baseOrder, estimatedPrice: 0 };
 const invalidEstimatedPriceVerdict = evaluateRiskGates(invalidEstimatedPriceOrder, INITIAL_PORTFOLIO_STATE, snapshot);
