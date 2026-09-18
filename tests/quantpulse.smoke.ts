@@ -3,7 +3,7 @@ import { evaluateRiskGates, DEFAULT_RISK_CONFIG } from '../src/engines/riskEngin
 import { INITIAL_PORTFOLIO_STATE, executePaperOrder } from '../src/engines/paperTradingEngine';
 import { triggerEmergencyKillSwitch, resetKillSwitchWithVerification } from '../src/engines/killSwitchEngine';
 import { runFullBacktest } from '../src/engines/backtestingLab';
-import { evaluateStrategySignal } from '../src/engines/strategyEngine';
+import { evaluateStrategySignal, REGISTERED_STRATEGIES } from '../src/engines/strategyEngine';
 import { AuditLogChain } from '../src/engines/auditEngine';
 import type { OrderRequest } from '../src/types/order';
 import type { BacktestParameters } from '../src/types/backtest';
@@ -16,6 +16,9 @@ const bars = generateSyntheticDailyBars('NIFTY50', 120);
 assert(bars.length === 120, 'synthetic market generator returns requested bar count');
 const unsupportedStrategyResult = evaluateStrategySignal({ id: 'UNKNOWN_STRATEGY', name: 'Unknown', type: 'MOMENTUM', description: '', entryConditions: [], exitConditions: [], stopLossRule: '', takeProfitRule: '', positionSizingMethod: 'FIXED_FRACTIONAL', requiredIndicators: [], assumptions: [], isActive: true, minConfidenceThreshold: 0.5 }, 'NIFTY50', bars);
 assert(unsupportedStrategyResult.signal === 'NO_TRADE' && unsupportedStrategyResult.targetQuantity === 0, 'unknown strategy ids fail closed without falling through to another strategy');
+
+const invalidIndicatorResult = evaluateStrategySignal(REGISTERED_STRATEGIES[0], 'NIFTY50', [{ ...bars[bars.length - 1], close: Number.NaN }]);
+assert(invalidIndicatorResult.signal === 'NO_TRADE' && invalidIndicatorResult.targetQuantity === 0, 'invalid indicator inputs fail closed without producing an actionable signal');
 assert(validateMarketDataSeries(bars).isValid, 'generated market data passes validation');
 
 let invalidGeneratorRejected = false;
