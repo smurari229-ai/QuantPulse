@@ -38,8 +38,15 @@ export default function App() {
   const [portfolio, setPortfolio] = useState<PortfolioState>(INITIAL_PORTFOLIO_STATE);
   const [orders, setOrders] = useState<OrderRequest[]>([]);
   const [riskConfig, setRiskConfig] = useState<RiskEngineConfig>({ ...DEFAULT_RISK_CONFIG });
+  const [clockMs, setClockMs] = useState(() => Date.now());
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setClockMs(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, []);
   const validationResult = useMemo(() => validateMarketDataSeries(bars), [bars]);
   const indicators = useMemo(() => computeAllIndicators(bars), [bars]);
+  const isMarketDataStale = !Number.isFinite(marketSnapshot.timestamp) || marketSnapshot.timestamp > clockMs || clockMs - marketSnapshot.timestamp > riskConfig.maxDataStalenessMs || marketSnapshot.dataQuality.isStale;
   const killActive = killSwitchState.isGlobalTradingOff || killSwitchState.isEmergencyStopTripped || killSwitchState.isDailyLossLockTripped || killSwitchState.isApiFailureLockTripped || killSwitchState.isDataStaleLockTripped || killSwitchState.isAbnormalFrequencyLockTripped;
   const [aiDecision, setAiDecision] = useState(() => {
     const news = getNewsSentimentForSymbol(selectedSymbol);
@@ -89,7 +96,7 @@ export default function App() {
       executionMode: 'PAPER', timestamp: Date.now(),
     };
     setCurrentVerdict(evaluateRiskGates(dummyOrder, portfolio, marketSnapshot, riskContext, riskConfig));
-  }, [selectedSymbol, marketSnapshot, portfolio, riskContext, riskConfig]);
+  }, [selectedSymbol, marketSnapshot, portfolio, riskContext, riskConfig, clockMs]);
 
   const handleSelectSymbol = useCallback((newSymbol: string) => {
     setSelectedSymbol(newSymbol);
@@ -104,11 +111,11 @@ export default function App() {
   const failedRiskChecksCount = currentVerdict.checks.filter(c => !c.passed).length;
 
   return <div id="quantpulse-platform-root" className="min-h-screen bg-slate-950 text-slate-100 flex flex-col antialiased selection:bg-blue-600 selection:text-white">
-    <Header executionMode={executionMode} killSwitchState={killSwitchState} onTriggerKillSwitch={handleHeaderKillSwitch} dailyPnL={portfolio.dailyPnL} equity={portfolio.equity} isStaleData={marketSnapshot.dataQuality.isStale} activeView={activeView} />
+    <Header executionMode={executionMode} killSwitchState={killSwitchState} onTriggerKillSwitch={handleHeaderKillSwitch} dailyPnL={portfolio.dailyPnL} equity={portfolio.equity} isStaleData={isMarketDataStale} activeView={activeView} />
     <div className="flex-1 flex overflow-hidden"><Sidebar activeView={activeView} onSelectView={setActiveView} failedRiskChecksCount={failedRiskChecksCount} />
       <main className="flex-1 overflow-y-auto p-4 md:p-6 bg-slate-950/60"><div className="max-w-7xl mx-auto">
         {activeView === 'portfolio' && <PortfolioView portfolio={portfolio} riskConfig={riskConfig} />}
-        {activeView === 'market' && <MarketOverviewView selectedSymbol={selectedSymbol} onSelectSymbol={handleSelectSymbol} bars={bars} snapshot={marketSnapshot} validationResult={validationResult} isStaleData={marketSnapshot.dataQuality.isStale} />}
+        {activeView === 'market' && <MarketOverviewView selectedSymbol={selectedSymbol} onSelectSymbol={handleSelectSymbol} bars={bars} snapshot={marketSnapshot} validationResult={validationResult} isStaleData={isMarketDataStale} />}
         {activeView === 'analysis' && <MarketAnalysisView symbol={selectedSymbol} indicators={indicators} currentPrice={marketSnapshot.lastPrice} />}
         {activeView === 'news' && <NewsEventView />}
         {activeView === 'ai' && <AiDecisionView decision={aiDecision} indicators={indicators} currentPrice={marketSnapshot.lastPrice} symbol={selectedSymbol} marketSnapshot={marketSnapshot} onRefreshDecision={setAiDecision} />}
