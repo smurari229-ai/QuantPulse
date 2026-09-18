@@ -74,6 +74,38 @@ export function evaluateRiskGates(
   const checks: IndividualRiskCheckResult[] = [];
   const rejectionReasons: string[] = [];
 
+  // Risk configuration is a safety boundary. Reject malformed runtime configs
+  // instead of allowing a caller to accidentally weaken a gate with invalid values.
+  const numericConfigValues = [
+    config.maxPositionSizeNotional, config.maxPositionPctOfPortfolio,
+    config.maxPortfolioExposurePct, config.maxDailyLossPct, config.maxDrawdownHaltPct,
+    config.maxTradesPerDay, config.minOrderIntervalSeconds, config.minRiskRewardRatio,
+    config.maxEstimatedSlippageBps, config.maxDataStalenessMs, config.maxSpreadBps,
+    config.enforceDuplicateWindowSeconds,
+  ];
+  const validConfig = numericConfigValues.every(Number.isFinite)
+    && config.maxPositionSizeNotional > 0
+    && config.maxPositionPctOfPortfolio > 0 && config.maxPositionPctOfPortfolio <= 100
+    && config.maxPortfolioExposurePct > 0 && config.maxPortfolioExposurePct <= 100
+    && config.maxDailyLossPct > 0 && config.maxDailyLossPct <= 100
+    && config.maxDrawdownHaltPct > 0 && config.maxDrawdownHaltPct <= 100
+    && config.maxTradesPerDay > 0 && config.minOrderIntervalSeconds >= 0
+    && config.minRiskRewardRatio > 0 && config.maxEstimatedSlippageBps >= 0
+    && config.maxDataStalenessMs > 0 && config.maxSpreadBps > 0
+    && config.enforceDuplicateWindowSeconds >= 0;
+  if (!validConfig) {
+    const invalidConfigCheck: IndividualRiskCheckResult = {
+      checkName: 'ORDER_MARKET_SANITY', passed: false, severity: 'CRITICAL_REJECT',
+      currentValue: 'INVALID_RISK_CONFIG', thresholdLimit: 'VALID_FINITE_RISK_CONFIG',
+      reason: 'Risk evaluation rejected because the supplied risk configuration is invalid or non-finite.',
+    };
+    checks.push(invalidConfigCheck);
+    rejectionReasons.push('Invalid or non-finite risk configuration.');
+    const passedChecksCount = 0;
+    const auditableRiskToken = `RISK-VERDICT-${Date.now().toString(36).toUpperCase()}-REJT-${secureRandomDigits(1000, 9999)}`;
+    return { isApproved: false, timestamp: Date.now(), orderIdProposed: order.id || order.orderId || 'PROPOSED-ORDER', symbol: order.symbol, totalChecksCount: 1, passedChecksCount, failedChecksCount: 1, checks: [{ ...invalidConfigCheck, gateId: invalidConfigCheck.checkName, gateName: 'ORDER MARKET SANITY', status: 'FAILED', threshold: invalidConfigCheck.thresholdLimit, message: invalidConfigCheck.reason }], rejectionReasons, auditableRiskToken };
+  }
+
   const referencePrice = order.estimatedPrice
     ?? (order.type === 'LIMIT' ? order.limitPrice ?? Number.NaN : order.side === 'BUY' ? marketSnapshot.ask : marketSnapshot.bid);
   const notional = order.quantity * referencePrice;
