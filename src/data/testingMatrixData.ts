@@ -10,9 +10,9 @@ export const INITIAL_TEST_CASES: TestCaseItem[] = [
     preConditions: 'Pre-computed OHLCV series of 50 bars with known closing prices.',
     executionSteps: 'Run calculateEMA(closes, 20) and compare index 19 against hand-calculated recursive formula value.',
     expectedBehavior: 'Output matches within 1e-4 precision.',
-    status: 'PASS',
-    lastExecutedTimestamp: Date.now() - 3600000,
-    assertionMessage: 'EMA value 24812.43 matched benchmark 24812.43.',
+    status: 'NOT_RUN',
+    lastExecutedTimestamp: undefined,
+    assertionMessage: 'Requires executable benchmark assertion; documented expectation only.',
   },
   {
     id: 'TC-UNIT-02',
@@ -22,9 +22,9 @@ export const INITIAL_TEST_CASES: TestCaseItem[] = [
     preConditions: 'Bar series with 10 consecutive positive limit-up days.',
     executionSteps: 'Compute calculateRSI(closes, 14) over extreme momentum sequence.',
     expectedBehavior: 'RSI approaches 100 asymptotically without exceeding 100.00 or generating NaN.',
-    status: 'PASS',
-    lastExecutedTimestamp: Date.now() - 3600000,
-    assertionMessage: 'RSI max value was 98.42, no NaN encountered.',
+    status: 'NOT_RUN',
+    lastExecutedTimestamp: undefined,
+    assertionMessage: 'Requires executable extreme-series assertion; documented expectation only.',
   },
 
   // 2. STRATEGY TESTS
