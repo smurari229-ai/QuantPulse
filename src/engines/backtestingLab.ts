@@ -1,6 +1,7 @@
 import { OHLCV } from '../types/market';
 import { BacktestParameters, BacktestRunResult } from '../types/backtest';
 import { runFullBacktest as runCoreBacktest } from './backtestingLabCore';
+import { SUPPORTED_INSTRUMENTS } from './marketDataEngine';
 
 /**
  * Public backtest entry point.
@@ -14,6 +15,8 @@ export function runFullBacktest(
   bars: OHLCV[],
   params: BacktestParameters
 ): BacktestRunResult {
+  if (!SUPPORTED_INSTRUMENTS.some((instrument) => instrument.symbol === params.symbol)) throw new Error(`Unsupported backtest symbol: ${params.symbol}`);
+
   const start = parseDateBoundary(params.startDate);
   const endStart = parseDateBoundary(params.endDate);
   if (start === null || endStart === null) {
