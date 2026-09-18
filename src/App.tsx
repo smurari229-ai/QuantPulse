@@ -26,6 +26,7 @@ import { evaluateRiskGates, DEFAULT_RISK_CONFIG, RecentOrderContext } from './en
 import { INITIAL_PORTFOLIO_STATE } from './engines/paperTradingEngine';
 import { getKillSwitchState, triggerEmergencyKillSwitch, KillSwitchState } from './engines/killSwitchEngine';
 import { OrderRequest, PortfolioState, RiskValidationVerdict, SystemExecutionMode } from './types/order';
+import { RiskEngineConfig } from './types/risk';
 
 export default function App() {
   const [activeView, setActiveView] = useState<NavViewId>('portfolio');
