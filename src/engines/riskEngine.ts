@@ -110,7 +110,19 @@ export function evaluateRiskGates(
     ?? (order.type === 'LIMIT' ? order.limitPrice ?? Number.NaN : order.side === 'BUY' ? marketSnapshot.ask : marketSnapshot.bid);
   const validOrderSide = order.side === 'BUY' || order.side === 'SELL';
   const validOrderType = order.type === 'MARKET' || order.type === 'LIMIT';
-  const validSymbol = typeof order.symbol === 'string' && order.symbol.trim().length > 0;
+  const validSymbol = typeof order.symbol === 'string' && order.symbol.trim().length > 0 && order.symbol === marketSnapshot.symbol;
+  const validPortfolioState = Number.isFinite(portfolio.cash) && portfolio.cash >= 0
+    && Number.isFinite(portfolio.equity) && portfolio.equity > 0
+    && Number.isFinite(portfolio.dayStartEquity) && portfolio.dayStartEquity > 0
+    && Number.isFinite(portfolio.dayStartTimestamp) && portfolio.dayStartTimestamp > 0
+    && Number.isFinite(portfolio.currentDrawdownPct) && portfolio.currentDrawdownPct >= 0
+    && Array.isArray(portfolio.positions)
+    && portfolio.positions.every((position) =>
+      typeof position.symbol === 'string'
+      && position.symbol.trim().length > 0
+      && Number.isFinite(position.quantity) && position.quantity >= 0
+      && Number.isFinite(position.marketValue) && position.marketValue >= 0
+    );
   const notional = order.quantity * referencePrice;
   const positionPct = portfolio.equity > 0 ? (notional / portfolio.equity) * 100 : 100;
   const currentInvested = portfolio.positions.reduce((sum, p) => sum + p.marketValue, 0);
@@ -120,10 +132,12 @@ export function evaluateRiskGates(
 
   const validQuantity = Number.isFinite(order.quantity) && order.quantity > 0;
   const validReferencePrice = Number.isFinite(referencePrice) && referencePrice > 0;
-  const validMarketPrices = Number.isFinite(marketSnapshot.bid) && Number.isFinite(marketSnapshot.ask)
+  const validMarketPrices = marketSnapshot.symbol === order.symbol
+    && Number.isFinite(marketSnapshot.lastPrice) && marketSnapshot.lastPrice > 0
+    && Number.isFinite(marketSnapshot.bid) && Number.isFinite(marketSnapshot.ask)
     && marketSnapshot.bid > 0 && marketSnapshot.ask >= marketSnapshot.bid;
-  const passedSanity = validQuantity && validReferencePrice && validMarketPrices && validOrderSide && validOrderType && validSymbol;
-  checks.push({ checkName: 'ORDER_MARKET_SANITY', passed: passedSanity, severity: 'CRITICAL_REJECT', currentValue: passedSanity ? 'VALID' : 'INVALID_INPUT', thresholdLimit: 'Positive finite quantity/price and valid bid/ask', reason: passedSanity ? 'Order quantity, side/type, symbol, and market pricing inputs are valid.' : 'Order rejected: malformed quantity, side/type, symbol, reference price, bid, or ask.' });
+  const passedSanity = validQuantity && validReferencePrice && validMarketPrices && validOrderSide && validOrderType && validSymbol && validPortfolioState;
+  checks.push({ checkName: 'ORDER_MARKET_SANITY', passed: passedSanity, severity: 'CRITICAL_REJECT', currentValue: passedSanity ? 'VALID' : 'INVALID_INPUT', thresholdLimit: 'Positive finite quantity/price and valid bid/ask', reason: passedSanity ? 'Order quantity, side/type, symbol, market pricing, and portfolio inputs are valid.' : 'Order rejected: malformed quantity, side/type, symbol, reference price, bid/ask, or portfolio state.' });
   if (!passedSanity) rejectionReasons.push('Malformed order or market pricing input.');
 
   const passedKillSwitch = !context.isEmergencyKillSwitchActive;
