@@ -75,8 +75,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
         volumeCondition: 'AI_ANALYZED',
       },
     });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : 'AI provider request failed.';
-    return res.status(502).json({ error: `Real AI request failed safely: ${message}` });
+  } catch {
+    return res.status(502).json({ error: 'Real AI request failed safely. No trading action was authorized or executed.' });
   }
 }
