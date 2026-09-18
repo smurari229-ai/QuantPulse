@@ -103,7 +103,7 @@ export function evaluateRiskGates(
     rejectionReasons.push('Invalid or non-finite risk configuration.');
     const passedChecksCount = 0;
     const auditableRiskToken = `RISK-VERDICT-${Date.now().toString(36).toUpperCase()}-REJT-${secureRandomDigits(1000, 9999)}`;
-    return { isApproved: false, timestamp: Date.now(), orderIdProposed: order.id || order.orderId || 'PROPOSED-ORDER', symbol: order.symbol, totalChecksCount: 1, passedChecksCount, failedChecksCount: 1, checks: [{ ...invalidConfigCheck, gateId: invalidConfigCheck.checkName, gateName: 'ORDER MARKET SANITY', status: 'FAILED', threshold: invalidConfigCheck.thresholdLimit, message: invalidConfigCheck.reason }], rejectionReasons, auditableRiskToken };
+    return { isApproved: false, timestamp: Date.now(), orderIdProposed: order.id || order.orderId || 'PROPOSED-ORDER', symbol: order.symbol, totalChecksCount: 1, passedChecksCount, failedChecksCount: 1, checks: [{ ...invalidConfigCheck, gateId: invalidConfigCheck.checkName, gateName: 'RISK CONFIGURATION SANITY', status: 'FAILED', threshold: invalidConfigCheck.thresholdLimit, message: invalidConfigCheck.reason }], rejectionReasons, auditableRiskToken };
   }
 
   const referencePrice = order.estimatedPrice
