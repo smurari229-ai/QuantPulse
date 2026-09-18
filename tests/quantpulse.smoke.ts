@@ -128,9 +128,16 @@ const goodReset = resetKillSwitchWithVerification(killState, killState.resetConf
 assert(goodReset.success && !goodReset.updatedState.isEmergencyStopTripped, 'correct reset code re-arms sandbox');
 
 const auditLedger = new AuditLogChain();
-const auditRecord = auditLedger.appendRecord('RISK_GATE_REJECTED', 'RISK_ENGINE', { apiKey: 'SECRET', symbol: 'NIFTY50' }, 'WARNING');
+const auditRecord = auditLedger.appendRecord(
+  'RISK_GATE_REJECTED',
+  'RISK_ENGINE',
+  { apiKey: 'SECRET', symbol: 'NIFTY50', nested: { password: '123', accessToken: 'TOKEN' } },
+  'WARNING'
+);
 assert(auditLedger.verifyChainIntegrity(), 'audit chain verifies immediately after append');
-assert(!('apiKey' in auditRecord.details), 'audit records do not retain apiKey secrets');
+assert(auditRecord.details.apiKey === '[REDACTED]', 'audit records redact apiKey secrets');
+assert((auditRecord.details.nested as Record<string, unknown>).password === '[REDACTED]', 'audit records redact nested password secrets');
+assert((auditRecord.details.nested as Record<string, unknown>).accessToken === '[REDACTED]', 'audit records redact nested token secrets');
 const tamperRecord = auditLedger.getAllRecords(2)[0];
 tamperRecord.details.symbol = 'TAMPERED';
 assert(!auditLedger.verifyChainIntegrity(), 'audit chain detects record tampering');
