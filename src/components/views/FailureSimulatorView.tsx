@@ -22,7 +22,8 @@ export const FailureSimulatorView: React.FC<FailureSimulatorViewProps> = ({ port
     } else if (scenarioId === 'MISSING_STOP_LOSS') {
       const verdict = evaluateRiskGates(makeOrder({ quantity: 5, stopLossPrice: 0 }), portfolio, marketSnapshot); onRiskVerdictGenerated(verdict); log('INJECTED: order with stop-loss = 0. Mandatory stop-loss gate should reject it.');
     } else if (scenarioId === 'DAILY_LOSS_BREACH') {
-      const lossPortfolio = { ...portfolio, dailyPnL: -3500, dailyPnLPct: -3.5 }; const verdict = evaluateRiskGates(makeOrder(), lossPortfolio, marketSnapshot); onRiskVerdictGenerated(verdict); log('INJECTED: daily loss -3.5%. Daily loss circuit breaker should reject new orders.');
+      const lossEquity = portfolio.dayStartEquity > 0 ? portfolio.dayStartEquity * 0.965 : portfolio.equity * 0.965;
+      const lossPortfolio = { ...portfolio, equity: lossEquity, dailyPnL: lossEquity - portfolio.dayStartEquity, dailyPnLPct: -3.5 }; const verdict = evaluateRiskGates(makeOrder(), lossPortfolio, marketSnapshot); onRiskVerdictGenerated(verdict); log('INJECTED: daily loss -3.5%. Daily loss circuit breaker should reject new orders.');
     } else if (scenarioId === 'EMERGENCY_STOP_SIM') {
       onUpdateKillSwitch(triggerEmergencyKillSwitch('Automated simulation failure test')); log('TRIGGERED: emergency kill switch. Paper order routing is now blocked until reset.');
     }
