@@ -36,6 +36,7 @@ export default function App() {
   const [marketSnapshot, setMarketSnapshot] = useState(() => generateMarketSnapshot('NIFTY50', bars[bars.length - 1].close));
   const [portfolio, setPortfolio] = useState<PortfolioState>(INITIAL_PORTFOLIO_STATE);
   const [orders, setOrders] = useState<OrderRequest[]>([]);
+  const [riskConfigRevision, setRiskConfigRevision] = useState(0);
   const validationResult = useMemo(() => validateMarketDataSeries(bars), [bars]);
   const indicators = useMemo(() => computeAllIndicators(bars), [bars]);
   const killActive = killSwitchState.isGlobalTradingOff || killSwitchState.isEmergencyStopTripped || killSwitchState.isDailyLossLockTripped || killSwitchState.isApiFailureLockTripped || killSwitchState.isDataStaleLockTripped || killSwitchState.isAbnormalFrequencyLockTripped;
@@ -87,7 +88,7 @@ export default function App() {
       executionMode: 'PAPER', timestamp: Date.now(),
     };
     setCurrentVerdict(evaluateRiskGates(dummyOrder, portfolio, marketSnapshot, riskContext, DEFAULT_RISK_CONFIG));
-  }, [selectedSymbol, marketSnapshot, portfolio, riskContext]);
+  }, [selectedSymbol, marketSnapshot, portfolio, riskContext, riskConfigRevision]);
 
   const handleSelectSymbol = useCallback((newSymbol: string) => {
     setSelectedSymbol(newSymbol);
@@ -121,7 +122,7 @@ export default function App() {
         {activeView === 'roadmap' && <ArchitectureRoadmapView />}
         {activeView === 'system_design' && <SystemDesignDocsView />}
         {activeView === 'testing' && <TestingMatrixView />}
-        {activeView === 'settings' && <SettingsView executionMode={executionMode} onUpdateExecutionMode={setExecutionMode} />}
+        {activeView === 'settings' && <SettingsView executionMode={executionMode} onUpdateExecutionMode={setExecutionMode} onRiskConfigSaved={() => setRiskConfigRevision((revision) => revision + 1)} />}
       </div></main>
     </div>
   </div>;
