@@ -6,7 +6,7 @@ import { Settings, Shield, Lock, AlertTriangle, Save, Activity } from 'lucide-re
 interface SettingsViewProps {
   executionMode: SystemExecutionMode;
   onUpdateExecutionMode: (mode: SystemExecutionMode) => void;
-  onRiskConfigSaved: () => void;
+  onRiskConfigSaved: (config: RiskEngineConfig) => void;
 }
 
 export const SettingsView: React.FC<SettingsViewProps> = ({
