@@ -133,6 +133,7 @@ export function evaluateRiskGates(
   const validQuantity = Number.isFinite(order.quantity) && order.quantity > 0;
   const validReferencePrice = Number.isFinite(referencePrice) && referencePrice > 0;
   const validMarketPrices = marketSnapshot.symbol === order.symbol
+    && marketSnapshot.dataQuality.isValidated === true
     && Number.isFinite(marketSnapshot.lastPrice) && marketSnapshot.lastPrice > 0
     && Number.isFinite(marketSnapshot.bid) && Number.isFinite(marketSnapshot.ask)
     && marketSnapshot.bid > 0 && marketSnapshot.ask >= marketSnapshot.bid;
