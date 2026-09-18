@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { OHLCV } from '../../types/market';
 import { BacktestParameters, BacktestRunResult } from '../../types/backtest';
-import { runFullBacktest } from '../../engines/backtestingLab';
+import { runDateScopedBacktest } from '../../engines/backtestInputGuard';
 import { FlaskConical, AlertTriangle, TrendingUp, Sliders, ShieldCheck, Play, Layers } from 'lucide-react';
 
 interface BacktestingLabViewProps {
@@ -39,7 +39,7 @@ export const BacktestingLabView: React.FC<BacktestingLabViewProps> = ({ bars, sy
   }, [symbol]);
 
   const backtestResult: BacktestRunResult = useMemo(() => {
-    return runFullBacktest(bars, { ...params, symbol });
+    return runDateScopedBacktest(bars, { ...params, symbol });
   }, [bars, params, symbol]);
 
   const { combinedMetrics, inSampleMetrics, outOfSampleMetrics, walkForwardResults, equityCurve, overfittingRiskAssessment } = backtestResult;
@@ -122,10 +122,11 @@ export const BacktestingLabView: React.FC<BacktestingLabViewProps> = ({ bars, sy
               className="w-full bg-slate-950 border border-slate-800 rounded px-2 py-1.5 text-slate-200 text-xs focus:outline-none focus:border-blue-500"
             >
               <option value="TF_EMA_CROSS">Trend Following (EMA)</option>
-              <option value="MR_RSI_BOLLINGER">Mean Reversion (RSI/BB)</option>
-              <option value="BO_VOLATILITY_SQUEEZE">Volatility Breakout</option>
-              <option value="MOM_MACD_HIST">MACD Momentum</option>
+              <option value="MR_RSI_BOLLINGER" disabled>Mean Reversion (RSI/BB) — simulation pending</option>
+              <option value="BO_VOLATILITY_SQUEEZE" disabled>Volatility Breakout — simulation pending</option>
+              <option value="MOM_MACD_HIST" disabled>MACD Momentum — simulation pending</option>
             </select>
+            <p className="text-[9px] text-slate-500 mt-1">Backtest execution currently supports TF_EMA_CROSS only.</p>
           </div>
 
           <div>
