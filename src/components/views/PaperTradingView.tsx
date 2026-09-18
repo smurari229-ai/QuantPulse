@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { OrderRequest, PortfolioState, RiskValidationVerdict } from '../../types/order';
 import { MarketDataSnapshot } from '../../types/market';
 import { RiskEngineConfig } from '../../types/risk';
@@ -32,6 +32,11 @@ export const PaperTradingView: React.FC<PaperTradingViewProps> = ({ portfolio, r
     setTakeProfitPrice(Number((marketSnapshot.lastPrice * 1.08).toFixed(2)));
   }, [marketSnapshot.symbol, marketSnapshot.lastPrice]);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const killSwitchRef = useRef(isEmergencyKillSwitchActive);
+
+  useEffect(() => {
+    killSwitchRef.current = isEmergencyKillSwitchActive;
+  }, [isEmergencyKillSwitchActive]);
   const referencePrice = orderType === 'LIMIT' ? limitPrice : marketSnapshot.lastPrice;
   const notionalValue = quantity * referencePrice;
   const estimatedSlippage = notionalValue * 0.00045;
@@ -48,7 +53,7 @@ export const PaperTradingView: React.FC<PaperTradingViewProps> = ({ portfolio, r
     onRiskVerdictGenerated(verdict);
     if (!verdict.isApproved) { setExecutionLog(prev => [`[${new Date().toLocaleTimeString()}] REJECTED by Risk Engine: ${verdict.rejectionReasons.join('; ')}`, ...prev]); setIsSubmitting(false); return; }
     setTimeout(() => {
-      const result = executePaperOrder(proposedOrder, portfolio, marketSnapshot);
+      const result = executePaperOrder(proposedOrder, portfolio, marketSnapshot, { isExecutionHalted: killSwitchRef.current });
       if (result.status === 'FILLED' && result.fill) {
         setExecutionLog(prev => [`[${new Date().toLocaleTimeString()}] FILLED: ${side} ${quantity} ${symbol} @ $${result.fill!.price.toFixed(2)} (Slippage: ${result.fill!.slippageIncurredBps} bps, Fees: $${result.totalCharges.toFixed(2)}) - Token: ${verdict.auditableRiskToken.slice(0, 10)}...`, ...prev]);
         onOrderExecuted(result.updatedPortfolio, proposedOrder);
