@@ -18,6 +18,8 @@ interface AiDecisionViewProps {
 export const AiDecisionView: React.FC<AiDecisionViewProps> = ({ decision, indicators, currentPrice, symbol, marketSnapshot, onRefreshDecision }) => {
   const [showRawJson, setShowRawJson] = useState<boolean>(false);
   const [isEvaluating, setIsEvaluating] = useState<boolean>(false);
+  const [isGeminiEvaluating, setIsGeminiEvaluating] = useState<boolean>(false);
+  const [aiError, setAiError] = useState<string | null>(null);
 
   const handleReRun = () => {
     setIsEvaluating(true);
@@ -36,6 +38,28 @@ export const AiDecisionView: React.FC<AiDecisionViewProps> = ({ decision, indica
       onRefreshDecision(updated);
       setIsEvaluating(false);
     }, 450);
+  };
+
+  const handleGeminiEvaluation = async () => {
+    setIsGeminiEvaluating(true);
+    setAiError(null);
+    try {
+      const spreadBps = marketSnapshot.bid > 0 && marketSnapshot.ask >= marketSnapshot.bid ? ((marketSnapshot.ask - marketSnapshot.bid) / marketSnapshot.bid) * 10000 : Number.POSITIVE_INFINITY;
+      const dataStalenessMs = Math.max(0, Date.now() - marketSnapshot.timestamp);
+      const news = getNewsSentimentForSymbol(symbol);
+      const response = await fetch('/api/ai-decision', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ input: { symbol, timestamp: Date.now(), currentPrice, indicators, newsSentiment: news.latestItem ? { headline: news.latestItem.headline, score: news.latestItem.sentimentScore, source: news.latestItem.source, timestamp: news.latestItem.timestamp } : undefined, currentMarketConditions: { spreadBps, dataStalenessMs } } }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload.error || 'Gemini advisory request failed.');
+      onRefreshDecision(payload as AIDecisionOutput);
+    } catch (error) {
+      setAiError(error instanceof Error ? error.message : 'Gemini advisory request failed safely.');
+    } finally {
+      setIsGeminiEvaluating(false);
+    }
   };
 
   const getSignalBadge = (sig: AIDecisionOutput['signal']) => {
@@ -57,9 +81,10 @@ export const AiDecisionView: React.FC<AiDecisionViewProps> = ({ decision, indica
       <div className="bg-slate-900 border border-slate-800 rounded-lg overflow-hidden">
         <div className="px-5 py-4 bg-slate-950/40 border-b border-slate-800 flex flex-wrap justify-between items-center gap-4">
           <div className="flex items-center space-x-3"><div className="w-9 h-9 rounded bg-indigo-900/50 border border-indigo-500/30 flex items-center justify-center"><Cpu className="w-5 h-5 text-indigo-400" /></div><div><div className="flex items-center space-x-2"><h2 className="text-base font-semibold text-slate-100">Structured AI Decision Output</h2><span className="text-[10px] font-mono bg-slate-800 text-slate-400 px-2 py-0.5 rounded">{decision.modelIdentifier}</span></div><span className="text-xs text-slate-400 font-mono">Asset: {symbol} · Generated at {new Date(decision.generatedAt).toLocaleTimeString()}</span></div></div>
-          <div className="flex items-center space-x-3"><button onClick={() => setShowRawJson(!showRawJson)} className="flex items-center space-x-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded text-xs font-mono transition-colors"><Code className="w-3.5 h-3.5" /><span>{showRawJson ? 'Hide Schema' : 'Inspect JSON Schema'}</span></button><button onClick={handleReRun} disabled={isEvaluating} className="flex items-center space-x-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-800 text-white rounded text-xs font-semibold transition-colors"><RefreshCw className={`w-3.5 h-3.5 ${isEvaluating ? 'animate-spin' : ''}`} /><span>{isEvaluating ? 'Evaluating...' : 'Re-Run Heuristic Evaluation'}</span></button></div>
+          <div className="flex items-center space-x-3"><button onClick={() => setShowRawJson(!showRawJson)} className="flex items-center space-x-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded text-xs font-mono transition-colors"><Code className="w-3.5 h-3.5" /><span>{showRawJson ? 'Hide Schema' : 'Inspect JSON Schema'}</span></button><button onClick={handleReRun} disabled={isEvaluating} className="flex items-center space-x-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-800 text-white rounded text-xs font-semibold transition-colors"><RefreshCw className={`w-3.5 h-3.5 ${isEvaluating ? 'animate-spin' : ''}`} /><span>{isEvaluating ? 'Evaluating...' : 'Re-Run Heuristic Evaluation'}</span></button><button onClick={handleGeminiEvaluation} disabled={isGeminiEvaluating} className="flex items-center space-x-1.5 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-800 text-white rounded text-xs font-semibold transition-colors"><Cpu className={`w-3.5 h-3.5 ${isGeminiEvaluating ? 'animate-spin' : ''}`} /><span>{isGeminiEvaluating ? 'Gemini...' : 'Run Gemini Advisory'}</span></button></div>
         </div>
 
+        {aiError && <div className="mx-5 mt-4 p-3 rounded border border-amber-500/40 bg-amber-950/30 text-amber-200 text-xs font-mono" role="alert">{aiError}</div>}
         <div className="p-5 space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4"><div className="p-4 bg-slate-950/60 rounded-lg border border-slate-800"><span className="text-slate-400 text-xs font-mono block mb-2">RECOMMENDED ACTION</span><div>{getSignalBadge(decision.signal)}</div><span className="text-[11px] text-slate-400 block mt-2 font-mono">Strategy: {decision.strategy}</span></div><div className="p-4 bg-slate-950/60 rounded-lg border border-slate-800 md:col-span-2 space-y-2"><div className="flex justify-between items-center text-xs font-mono"><span className="text-slate-400">HEURISTIC PATTERN CONFIDENCE SCORE:</span><span className="text-base font-bold text-slate-100">{(decision.confidence * 100).toFixed(1)}% (Heuristic affinity, NOT probability of profit)</span></div><div className="w-full bg-slate-800 rounded-full h-2.5 overflow-hidden"><div className="bg-gradient-to-r from-blue-500 to-indigo-500 h-full rounded-full transition-all duration-500" style={{ width: `${decision.confidence * 100}%` }} /></div><div className="text-[10px] text-slate-400 font-mono">Formula uncalibrated score based on technical factor consensus and market regime compatibility.</div></div></div>
           <div className="p-4 bg-slate-950/40 rounded-lg border border-slate-800 space-y-1.5"><span className="text-xs font-mono text-slate-400 font-bold uppercase">Synthesized Rationale & Market Context:</span><p className="text-xs text-slate-200 leading-relaxed font-mono">{decision.reasoning}</p></div>
