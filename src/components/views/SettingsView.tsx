@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { SystemExecutionMode, RiskEngineConfig } from '../../types/order';
-import { DEFAULT_RISK_CONFIG } from '../../engines/riskEngine';
 import { Settings, Shield, Lock, AlertTriangle, Save, Activity } from 'lucide-react';
 
 interface SettingsViewProps {
