@@ -297,7 +297,7 @@ export const MarketOverviewView: React.FC<MarketOverviewViewProps> = ({
                     </div>
                     <div className="flex justify-between">
                       <span className="text-slate-400">Max Permitted Staleness:</span>
-                      <span className="text-slate-300">3000 ms</span>
+                      <span className="text-slate-300">{isStaleData ? '>' : '≤'} configured threshold</span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-slate-400">Missing Candles Count:</span>
