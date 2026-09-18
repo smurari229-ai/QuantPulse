@@ -89,7 +89,8 @@ export class AuditLogChain {
   }
 
   public getRecords(limit = 100): AuditRecord[] {
-    return [...this.records].reverse().slice(0, limit);
+    const safeLimit = Number.isInteger(limit) && limit > 0 ? Math.min(limit, 1000) : 100;
+    return [...this.records].reverse().slice(0, safeLimit);
   }
 
   public getAllRecords(limit = 100): AuditRecord[] {
