@@ -95,7 +95,7 @@ export function evaluateRiskGates(
     && config.enforceDuplicateWindowSeconds >= 0;
   if (!validConfig) {
     const invalidConfigCheck: IndividualRiskCheckResult = {
-      checkName: 'ORDER_MARKET_SANITY', passed: false, severity: 'CRITICAL_REJECT',
+      checkName: 'RISK_CONFIGURATION_SANITY', passed: false, severity: 'CRITICAL_REJECT',
       currentValue: 'INVALID_RISK_CONFIG', thresholdLimit: 'VALID_FINITE_RISK_CONFIG',
       reason: 'Risk evaluation rejected because the supplied risk configuration is invalid or non-finite.',
     };
