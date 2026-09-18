@@ -163,7 +163,7 @@ const unsupportedStop = executePaperOrder(unsupportedStopOrder, INITIAL_PORTFOLI
 assert(unsupportedStop.status === 'REJECTED' && unsupportedStop.rejectionReason?.includes('STOP_MARKET'), 'unsupported stop-market order is rejected explicitly');
 
 const params: BacktestParameters = {
-  strategyId: 'SMOKE_TREND', symbol: 'NIFTY50',
+  strategyId: 'TF_EMA_CROSS', symbol: 'NIFTY50',
   startDate: new Date(bars[0].timestamp).toISOString(),
   endDate: new Date(bars[bars.length - 1].timestamp).toISOString(),
   initialCapital: 100000, slippageModel: 'FIXED_BPS', slippageBps: 4.5,
