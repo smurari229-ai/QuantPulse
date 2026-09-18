@@ -116,7 +116,7 @@ export default function App() {
         {activeView === 'backtest' && <BacktestingLabView bars={bars} symbol={selectedSymbol} />}
         {activeView === 'paper' && <PaperTradingView riskConfig={riskConfig} portfolio={portfolio} marketSnapshot={marketSnapshot} isEmergencyKillSwitchActive={killActive} riskContext={riskContext} onOrderExecuted={handleOrderExecuted} onRiskVerdictGenerated={setCurrentVerdict} />}
         {activeView === 'orders' && <OrdersHistoryView orders={orders} />}
-        {activeView === 'risk' && <RiskMonitorView currentVerdict={currentVerdict} portfolio={portfolio} marketSnapshot={marketSnapshot} riskContext={riskContext} onNewVerdict={setCurrentVerdict} />}
+        {activeView === 'risk' && <RiskMonitorView riskConfig={riskConfig} currentVerdict={currentVerdict} portfolio={portfolio} marketSnapshot={marketSnapshot} riskContext={riskContext} onNewVerdict={setCurrentVerdict} />}
         {activeView === 'audit' && <AuditLogsView />}
         {activeView === 'killswitch' && <KillSwitchSafetyView killSwitchState={killSwitchState} portfolio={portfolio} onKillSwitchChanged={setKillSwitchState} />}
         {activeView === 'failure_sim' && <FailureSimulatorView portfolio={portfolio} marketSnapshot={marketSnapshot} onUpdateSnapshot={setMarketSnapshot} onUpdateKillSwitch={setKillSwitchState} onRiskVerdictGenerated={setCurrentVerdict} />}
