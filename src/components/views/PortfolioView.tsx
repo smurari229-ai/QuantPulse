@@ -1,15 +1,16 @@
 import React from 'react';
 import { PortfolioState } from '../../types/order';
-import { DEFAULT_RISK_CONFIG } from '../../engines/riskEngine';
+import { RiskEngineConfig } from '../../types/risk';
 import { ShieldCheck, TrendingUp, TrendingDown, DollarSign, PieChart as PieIcon, AlertCircle } from 'lucide-react';
 
 interface PortfolioViewProps {
   portfolio: PortfolioState;
+  riskConfig: RiskEngineConfig;
 }
 
-export const PortfolioView: React.FC<PortfolioViewProps> = ({ portfolio }) => {
+export const PortfolioView: React.FC<PortfolioViewProps> = ({ portfolio, riskConfig }) => {
   const isPositiveDay = portfolio.dailyPnL >= 0;
-  const maxExposure = DEFAULT_RISK_CONFIG.maxPortfolioExposurePct;
+  const maxExposure = riskConfig.maxPortfolioExposurePct;
   const exposureProgressPct = maxExposure > 0 ? Math.min(100, (portfolio.portfolioExposurePct / maxExposure) * 100) : 100;
 
   return (
@@ -45,7 +46,7 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({ portfolio }) => {
             {portfolio.dailyPnLPct.toFixed(2)}%)
           </div>
           <div className="text-[11px] text-slate-400 mt-1">
-            Circuit breaker threshold: -{DEFAULT_RISK_CONFIG.maxDailyLossPct.toFixed(2)}%
+            Circuit breaker threshold: -{riskConfig.maxDailyLossPct.toFixed(2)}%
           </div>
         </div>
 
