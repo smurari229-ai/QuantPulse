@@ -119,7 +119,7 @@ export default function App() {
         {activeView === 'risk' && <RiskMonitorView riskConfig={riskConfig} currentVerdict={currentVerdict} portfolio={portfolio} marketSnapshot={marketSnapshot} riskContext={riskContext} onNewVerdict={setCurrentVerdict} />}
         {activeView === 'audit' && <AuditLogsView />}
         {activeView === 'killswitch' && <KillSwitchSafetyView killSwitchState={killSwitchState} portfolio={portfolio} onKillSwitchChanged={setKillSwitchState} />}
-        {activeView === 'failure_sim' && <FailureSimulatorView portfolio={portfolio} marketSnapshot={marketSnapshot} onUpdateSnapshot={setMarketSnapshot} onUpdateKillSwitch={setKillSwitchState} onRiskVerdictGenerated={setCurrentVerdict} />}
+        {activeView === 'failure_sim' && <FailureSimulatorView riskConfig={riskConfig} portfolio={portfolio} marketSnapshot={marketSnapshot} onUpdateSnapshot={setMarketSnapshot} onUpdateKillSwitch={setKillSwitchState} onRiskVerdictGenerated={setCurrentVerdict} />}
         {activeView === 'roadmap' && <ArchitectureRoadmapView />}
         {activeView === 'system_design' && <SystemDesignDocsView />}
         {activeView === 'testing' && <TestingMatrixView />}
