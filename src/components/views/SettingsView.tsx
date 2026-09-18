@@ -5,12 +5,14 @@ import { Settings, Shield, Lock, AlertTriangle, Save, Activity } from 'lucide-re
 
 interface SettingsViewProps {
   executionMode: SystemExecutionMode;
+  riskConfig: RiskEngineConfig;
   onUpdateExecutionMode: (mode: SystemExecutionMode) => void;
   onRiskConfigSaved: (config: RiskEngineConfig) => void;
 }
 
 export const SettingsView: React.FC<SettingsViewProps> = ({
   executionMode,
+  riskConfig,
   onUpdateExecutionMode,
   onRiskConfigSaved,
 }) => {
@@ -37,8 +39,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       return;
     }
     setValidationError('');
-    Object.assign(DEFAULT_RISK_CONFIG, config);
-    onRiskConfigSaved();
+    onRiskConfigSaved(config);
     setIsSaved(true);
     setTimeout(() => setIsSaved(false), 2000);
   };
