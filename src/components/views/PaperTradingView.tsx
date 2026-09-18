@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { OrderRequest, PortfolioState, RiskValidationVerdict } from '../../types/order';
 import { MarketDataSnapshot } from '../../types/market';
 import { RiskEngineConfig } from '../../types/risk';
@@ -17,7 +17,7 @@ interface PaperTradingViewProps {
 }
 
 export const PaperTradingView: React.FC<PaperTradingViewProps> = ({ portfolio, riskConfig, marketSnapshot, isEmergencyKillSwitchActive = false, riskContext, onOrderExecuted, onRiskVerdictGenerated }) => {
-  const [symbol] = useState(marketSnapshot.symbol);
+  const symbol = marketSnapshot.symbol;
   const [side, setSide] = useState<'BUY' | 'SELL'>('BUY');
   const [orderType, setOrderType] = useState<'MARKET' | 'LIMIT'>('MARKET');
   const [quantity, setQuantity] = useState(10);
@@ -25,6 +25,12 @@ export const PaperTradingView: React.FC<PaperTradingViewProps> = ({ portfolio, r
   const [stopLossPrice, setStopLossPrice] = useState(Number((marketSnapshot.lastPrice * 0.96).toFixed(2)));
   const [takeProfitPrice, setTakeProfitPrice] = useState(Number((marketSnapshot.lastPrice * 1.08).toFixed(2)));
   const [executionLog, setExecutionLog] = useState<string[]>([]);
+
+  useEffect(() => {
+    setLimitPrice(Number(marketSnapshot.lastPrice.toFixed(2)));
+    setStopLossPrice(Number((marketSnapshot.lastPrice * 0.96).toFixed(2)));
+    setTakeProfitPrice(Number((marketSnapshot.lastPrice * 1.08).toFixed(2)));
+  }, [marketSnapshot.symbol, marketSnapshot.lastPrice]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const referencePrice = orderType === 'LIMIT' ? limitPrice : marketSnapshot.lastPrice;
   const notionalValue = quantity * referencePrice;
