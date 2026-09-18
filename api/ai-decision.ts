@@ -30,9 +30,10 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
   if (!apiKey) return res.status(503).json({ error: 'Real AI is not configured. Add GEMINI_API_KEY as a server-side environment variable.' });
 
   try {
-    const body = req.body ?? {};
-    const input = body.input;
-    if (!input || typeof input !== 'object') return res.status(400).json({ error: 'Missing AI feature input.' });
+    const body = (req.body && typeof req.body === 'object') ? req.body as Record<string, unknown> : {};
+    const rawInput = body.input;
+    if (!rawInput || typeof rawInput !== 'object') return res.status(400).json({ error: 'Missing AI feature input.' });
+    const input = rawInput as Record<string, any>;
 
     const ai = new GoogleGenAI({ apiKey });
     const prompt = [
