@@ -57,7 +57,7 @@ const snapshot = generateMarketSnapshot('NIFTY50', bars[bars.length - 1].close);
 
 const baseOrder: OrderRequest = {
   id: 'SMOKE-01', orderId: 'SMOKE-01', clientOrderId: 'SMOKE-CLI-01', symbol: 'NIFTY50', side: 'BUY',
-  type: 'MARKET', quantity: 1, limitPrice: snapshot.lastPrice,
+  type: 'MARKET', quantity: 0.25, limitPrice: snapshot.lastPrice,
   stopLossPrice: snapshot.lastPrice * 0.96, takeProfitPrice: snapshot.lastPrice * 1.08,
   executionMode: 'PAPER', timestamp: Date.now(),
 };
