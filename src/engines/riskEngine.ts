@@ -108,6 +108,9 @@ export function evaluateRiskGates(
 
   const referencePrice = order.estimatedPrice
     ?? (order.type === 'LIMIT' ? order.limitPrice ?? Number.NaN : order.side === 'BUY' ? marketSnapshot.ask : marketSnapshot.bid);
+  const validOrderSide = order.side === 'BUY' || order.side === 'SELL';
+  const validOrderType = order.type === 'MARKET' || order.type === 'LIMIT';
+  const validSymbol = typeof order.symbol === 'string' && order.symbol.trim().length > 0;
   const notional = order.quantity * referencePrice;
   const positionPct = portfolio.equity > 0 ? (notional / portfolio.equity) * 100 : 100;
   const currentInvested = portfolio.positions.reduce((sum, p) => sum + p.marketValue, 0);
@@ -119,8 +122,8 @@ export function evaluateRiskGates(
   const validReferencePrice = Number.isFinite(referencePrice) && referencePrice > 0;
   const validMarketPrices = Number.isFinite(marketSnapshot.bid) && Number.isFinite(marketSnapshot.ask)
     && marketSnapshot.bid > 0 && marketSnapshot.ask >= marketSnapshot.bid;
-  const passedSanity = validQuantity && validReferencePrice && validMarketPrices;
-  checks.push({ checkName: 'ORDER_MARKET_SANITY', passed: passedSanity, severity: 'CRITICAL_REJECT', currentValue: passedSanity ? 'VALID' : 'INVALID_INPUT', thresholdLimit: 'Positive finite quantity/price and valid bid/ask', reason: passedSanity ? 'Order quantity and market pricing inputs are valid.' : 'Order rejected: malformed quantity, reference price, bid, or ask.' });
+  const passedSanity = validQuantity && validReferencePrice && validMarketPrices && validOrderSide && validOrderType && validSymbol;
+  checks.push({ checkName: 'ORDER_MARKET_SANITY', passed: passedSanity, severity: 'CRITICAL_REJECT', currentValue: passedSanity ? 'VALID' : 'INVALID_INPUT', thresholdLimit: 'Positive finite quantity/price and valid bid/ask', reason: passedSanity ? 'Order quantity, side/type, symbol, and market pricing inputs are valid.' : 'Order rejected: malformed quantity, side/type, symbol, reference price, bid, or ask.' });
   if (!passedSanity) rejectionReasons.push('Malformed order or market pricing input.');
 
   const passedKillSwitch = !context.isEmergencyKillSwitchActive;
