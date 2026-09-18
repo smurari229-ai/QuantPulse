@@ -1,4 +1,5 @@
-import type { VercelRequest, VercelResponse } from '@vercel/node';
+type ApiRequest = { method?: string; body?: unknown };
+type ApiResponse = { status: (code: number) => ApiResponse; json: (body: unknown) => unknown; setHeader: (name: string, value: string) => void };
 import { GoogleGenAI } from '@google/genai';
 
 const SIGNALS = new Set(['BUY', 'SELL', 'HOLD', 'NO_TRADE']);
@@ -19,7 +20,7 @@ function validateDecision(value: unknown) {
   return d;
 }
 
-export default async function handler(req: VercelRequest, res: VercelResponse) {
+export default async function handler(req: ApiRequest, res: ApiResponse) {
   if (req.method !== 'POST') {
     res.setHeader('Allow', 'POST');
     return res.status(405).json({ error: 'Method not allowed.' });
