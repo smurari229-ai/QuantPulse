@@ -220,7 +220,7 @@ export const INITIAL_TEST_CASES: TestCaseItem[] = [
     expectedBehavior: 'Sanitized details object contains zero sensitive keys.',
     status: 'PASS',
     lastExecutedTimestamp: Date.now() - 2800000,
-    assertionMessage: 'Keys sanitized: apiKey and password stripped before hashing.',
+    assertionMessage: 'Sensitive values such as apiKey and password are redacted before the audit record is hashed.',
   },
   {
     id: 'TC-SEC-02',
