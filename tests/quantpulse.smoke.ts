@@ -48,6 +48,10 @@ assert(malformedMarketValidation.errors.some(e => e.includes('Non-finite')), 'no
 const malformedTimestampBars = bars.map((bar) => ({ ...bar }));
 malformedTimestampBars[5].timestamp = Number.NaN;
 assert(!validateMarketDataSeries(malformedTimestampBars).isValid, 'non-finite timestamp is rejected without validator crash');
+const negativeVolumeBars = bars.map((bar) => ({ ...bar }));
+negativeVolumeBars[7].volume = -1;
+const negativeVolumeValidation = validateMarketDataSeries(negativeVolumeBars);
+assert(!negativeVolumeValidation.isValid && negativeVolumeValidation.errors.some(e => e.includes('Negative volume')), 'negative market volume is rejected');
 
 const snapshot = generateMarketSnapshot('NIFTY50', bars[bars.length - 1].close);
 
