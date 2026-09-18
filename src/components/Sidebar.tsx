@@ -84,7 +84,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       items: [
         { id: 'roadmap' as NavViewId, label: 'Architecture & 10 Phases', icon: BookOpen },
         { id: 'system_design' as NavViewId, label: 'Data Model & APIs', icon: Code2 },
-        { id: 'testing' as NavViewId, label: 'Testing Matrix (15 Cats)', icon: CheckSquare },
+        { id: 'testing' as NavViewId, label: 'Testing Matrix (13 Cats)', icon: CheckSquare },
         { id: 'settings' as NavViewId, label: 'Risk Rules & Settings', icon: Settings },
       ],
     },
