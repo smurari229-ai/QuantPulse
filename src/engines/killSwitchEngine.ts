@@ -8,7 +8,7 @@ export interface KillSwitchState {
   isAbnormalFrequencyLockTripped: boolean;
   lastTrippedTimestamp?: number;
   lastTrippedReason?: string;
-  requiresDualManualReset: boolean;
+  requiresManualReset: boolean;
   resetConfirmationCode: string;
 }
 
@@ -20,7 +20,7 @@ export const INITIAL_KILL_SWITCH_STATE: KillSwitchState = {
   isApiFailureLockTripped: false,
   isDataStaleLockTripped: false,
   isAbnormalFrequencyLockTripped: false,
-  requiresDualManualReset: false,
+  requiresManualReset: false,
   resetConfirmationCode: '',
 };
 
@@ -60,7 +60,7 @@ export function triggerEmergencyKillSwitch(
     isEmergencyStopTripped: true,
     lastTrippedTimestamp: Date.now(),
     lastTrippedReason: reason,
-    requiresDualManualReset: true,
+    requiresManualReset: true,
     resetConfirmationCode: generateSecureConfirmationCode(),
   };
 }
@@ -81,7 +81,7 @@ export function resetKillSwitchWithVerification(
   currentState: KillSwitchState,
   enteredCode: string
 ): { success: boolean; updatedState: KillSwitchState; error?: string } {
-  if (!currentState.requiresDualManualReset) {
+  if (!currentState.requiresManualReset) {
     return {
       success: true,
       updatedState: {
@@ -111,7 +111,7 @@ export function resetKillSwitchWithVerification(
       isDataStaleLockTripped: false,
       isAbnormalFrequencyLockTripped: false,
       isGlobalTradingOff: false,
-      requiresDualManualReset: false,
+      requiresManualReset: false,
       resetConfirmationCode: '',
       lastTrippedReason: undefined,
     },
