@@ -251,8 +251,8 @@ export const INITIAL_TEST_CASES: TestCaseItem[] = [
   {
     id: 'TC-KILL-02',
     category: 'KILL_SWITCH',
-    name: 'Dual Authorization Code Manual Reset',
-    description: 'Ensure kill switch cannot be reset with incorrect confirmation code.',
+    name: 'Manual Authorization Code Reset',
+    description: 'Ensure kill switch cannot be reset without the generated confirmation code.',
     preConditions: 'Kill switch tripped with code "ABC123".',
     executionSteps: 'Attempt reset with code "WRONG".',
     expectedBehavior: 'Reset rejected; kill switch remains engaged.',
