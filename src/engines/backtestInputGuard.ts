@@ -1,8 +1,8 @@
 import { OHLCV } from '../types/market';
+import { BacktestParameters, BacktestRunResult } from '../types/backtest';
 import { SUPPORTED_INSTRUMENTS } from './marketDataEngine';
 
 const SUPPORTED_SYMBOLS = SUPPORTED_INSTRUMENTS.map((instrument) => instrument.symbol);
-import { BacktestParameters, BacktestRunResult } from '../types/backtest';
 import { runFullBacktest } from './backtestingLab';
 
 /**
