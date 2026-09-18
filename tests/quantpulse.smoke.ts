@@ -99,6 +99,8 @@ const customRiskConfig = { ...DEFAULT_RISK_CONFIG, maxPositionSizeNotional: 1 };
 const settingsDrivenVerdict = evaluateRiskGates(baseOrder, INITIAL_PORTFOLIO_STATE, snapshot, undefined, customRiskConfig);
 const invalidConfigVerdict = evaluateRiskGates(baseOrder, INITIAL_PORTFOLIO_STATE, snapshot, undefined, { ...DEFAULT_RISK_CONFIG, maxSpreadBps: Number.NaN });
 assert(!invalidConfigVerdict.isApproved && invalidConfigVerdict.rejectionReasons.some(reason => reason.includes('Invalid or non-finite risk configuration')), 'invalid runtime risk configuration fails closed');
+const invalidOrderVerdict = evaluateRiskGates({ ...baseOrder, side: 'INVALID' as any, type: 'INVALID' as any, symbol: '' }, INITIAL_PORTFOLIO_STATE, snapshot);
+assert(!invalidOrderVerdict.isApproved && invalidOrderVerdict.rejectionReasons.some(reason => reason.includes('Malformed order or market pricing input')), 'invalid order side/type/symbol fails closed');
 assert(!settingsDrivenVerdict.isApproved, 'runtime risk evaluation enforces the supplied saved risk boundary');
 assert(settingsDrivenVerdict.rejectionReasons.some(reason => reason.includes('Position size exceeds $1')), 'runtime verdict reflects supplied saved notional boundary');
 
