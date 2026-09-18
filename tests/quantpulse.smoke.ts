@@ -123,6 +123,8 @@ const anomalyVerdict = evaluateRiskGates(baseOrder, INITIAL_PORTFOLIO_STATE, ano
 assert(!anomalyVerdict.isApproved && anomalyVerdict.checks.some(c => c.checkName === 'ORDER_MARKET_SANITY' && !c.passed), 'risk engine rejects unvalidated market snapshots');
 const anomalyPaperResult = executePaperOrder(baseOrder, INITIAL_PORTFOLIO_STATE, anomalySnapshot);
 assert(anomalyPaperResult.status === 'REJECTED' && anomalyPaperResult.rejectionReason?.includes('not validated'), 'paper execution rejects unvalidated market snapshots');
+const haltedPaperResult = executePaperOrder(baseOrder, INITIAL_PORTFOLIO_STATE, snapshot, { isExecutionHalted: true });
+assert(haltedPaperResult.status === 'REJECTED' && haltedPaperResult.rejectionReason?.includes('kill switch'), 'paper execution rejects fills when execution is halted');
 
 const invalidPortfolioVerdict = evaluateRiskGates(baseOrder, { ...INITIAL_PORTFOLIO_STATE, dayStartTimestamp: Number.NaN }, snapshot);
 assert(!invalidPortfolioVerdict.isApproved && invalidPortfolioVerdict.checks.some(c => c.checkName === 'ORDER_MARKET_SANITY' && !c.passed), 'risk engine fails closed on invalid portfolio state');
