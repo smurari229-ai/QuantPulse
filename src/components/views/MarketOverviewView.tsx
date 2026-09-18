@@ -285,8 +285,8 @@ export const MarketOverviewView: React.FC<MarketOverviewViewProps> = ({
                   <div className="space-y-1.5 text-[11px]">
                     <div className="flex justify-between">
                       <span className="text-slate-400">Feed Latency:</span>
-                      <span className={snapshot.dataQuality.latencyMs > 3000 ? 'text-rose-400 font-bold' : 'text-emerald-400'}>
-                        {snapshot.dataQuality.latencyMs} ms
+                      <span className={isStaleData ? 'text-rose-400 font-bold' : 'text-emerald-400'}>
+                        {Number.isFinite(dataAgeMs) ? Math.round(dataAgeMs) : 'INVALID'} ms
                       </span>
                     </div>
                     <div className="flex justify-between">
