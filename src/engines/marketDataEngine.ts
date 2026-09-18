@@ -81,7 +81,8 @@ export function validateMarketDataSeries(bars: OHLCV[]): MarketValidationResult 
     if (!Number.isInteger(bar.timestamp) || bar.timestamp <= 0) { staleTimestamp = true; errors.push(`Bar #${i}: Invalid timestamp (${bar.timestamp}).`); }
     if (bar.open <= 0 || bar.high <= 0 || bar.low <= 0 || bar.close <= 0) { negativePrice = true; errors.push(`Bar #${i}: Non-positive price detected (Open=${bar.open}, Low=${bar.low}).`); }
     if (bar.high < bar.low || bar.open > bar.high || bar.close > bar.high || bar.open < bar.low || bar.close < bar.low) { highLowInversion = true; errors.push(`Bar #${i}: High/Low/Open/Close geometrical inversion detected (High=${bar.high}, Low=${bar.low}, Open=${bar.open}, Close=${bar.close}).`); }
-    if (bar.volume <= 0 && bar.high !== bar.low) { zeroVolumeSpike = true; warnings.push(`Bar #${i}: Zero volume with nonzero price movement.`); }
+    if (bar.volume < 0) { zeroVolumeSpike = true; errors.push(`Bar #${i}: Negative volume detected (${bar.volume}).`); }
+    if (bar.volume === 0 && bar.high !== bar.low) { zeroVolumeSpike = true; warnings.push(`Bar #${i}: Zero volume with nonzero price movement.`); }
     if (i > 0 && Number.isFinite(bars[i - 1].close) && bars[i - 1].close > 0) {
       const prevBar = bars[i - 1];
       const jumpPct = Math.abs(bar.open - prevBar.close) / prevBar.close;
