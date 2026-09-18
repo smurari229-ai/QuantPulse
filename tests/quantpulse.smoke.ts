@@ -111,6 +111,15 @@ const invalidConfigVerdict = evaluateRiskGates(baseOrder, INITIAL_PORTFOLIO_STAT
 assert(!invalidConfigVerdict.isApproved && invalidConfigVerdict.rejectionReasons.some(reason => reason.includes('Invalid or non-finite risk configuration')), 'invalid runtime risk configuration fails closed');
 const invalidOrderVerdict = evaluateRiskGates({ ...baseOrder, side: 'INVALID' as any, type: 'INVALID' as any, symbol: '' }, INITIAL_PORTFOLIO_STATE, snapshot);
 assert(!invalidOrderVerdict.isApproved && invalidOrderVerdict.rejectionReasons.some(reason => reason.includes('Malformed order or market pricing input')), 'invalid order side/type/symbol fails closed');
+
+const mismatchedSnapshot = generateMarketSnapshot('RELIANCE', 2940);
+const mismatchedSymbolVerdict = evaluateRiskGates(baseOrder, INITIAL_PORTFOLIO_STATE, mismatchedSnapshot);
+assert(!mismatchedSymbolVerdict.isApproved && mismatchedSymbolVerdict.checks.some(c => c.checkName === 'ORDER_MARKET_SANITY' && !c.passed), 'risk engine rejects orders priced against a different market snapshot');
+const mismatchedPaperResult = executePaperOrder(baseOrder, INITIAL_PORTFOLIO_STATE, mismatchedSnapshot);
+assert(mismatchedPaperResult.status === 'REJECTED' && mismatchedPaperResult.rejectionReason?.includes('does not match'), 'paper execution rejects orders against a different market snapshot');
+
+const invalidPortfolioVerdict = evaluateRiskGates(baseOrder, { ...INITIAL_PORTFOLIO_STATE, dayStartTimestamp: Number.NaN }, snapshot);
+assert(!invalidPortfolioVerdict.isApproved && invalidPortfolioVerdict.checks.some(c => c.checkName === 'ORDER_MARKET_SANITY' && !c.passed), 'risk engine fails closed on invalid portfolio state');
 let unsupportedSymbolRejected = false;
 try { getLiveSnapshot('UNSUPPORTED', 100); } catch { unsupportedSymbolRejected = true; }
 assert(unsupportedSymbolRejected, 'unsupported market-data symbol is rejected');
