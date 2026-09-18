@@ -31,6 +31,7 @@ function generateSecureConfirmationCode(): string {
 }
 
 export function canSubmitOrders(state: KillSwitchState): { allowed: boolean; reason?: string } {
+  if (state.isPaperOnlyLocked) return { allowed: false, reason: 'PAPER_ONLY_LOCK_ACTIVE' };
   if (state.isGlobalTradingOff) return { allowed: false, reason: 'GLOBAL_TRADING_OFF_SWITCH_ENGAGED' };
   if (state.isEmergencyStopTripped) return { allowed: false, reason: 'EMERGENCY_STOP_CIRCUIT_BREAKER_ACTIVE' };
   if (state.isDailyLossLockTripped) return { allowed: false, reason: 'DAILY_LOSS_LIMIT_LOCK_ACTIVE' };
