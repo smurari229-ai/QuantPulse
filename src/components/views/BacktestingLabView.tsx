@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { OHLCV } from '../../types/market';
 import { BacktestParameters, BacktestRunResult } from '../../types/backtest';
 import { runFullBacktest } from '../../engines/backtestingLab';
@@ -13,8 +13,8 @@ export const BacktestingLabView: React.FC<BacktestingLabViewProps> = ({ bars, sy
   const [params, setParams] = useState<BacktestParameters>({
     strategyId: 'TF_EMA_CROSS',
     symbol,
-    startDate: '2024-01-01',
-    endDate: '2024-12-31',
+    startDate: bars.length > 0 ? new Date(bars[0].timestamp).toISOString().slice(0, 10) : '2024-01-01',
+    endDate: bars.length > 0 ? new Date(bars[bars.length - 1].timestamp).toISOString().slice(0, 10) : '2024-12-31',
     initialCapital: 100000,
     slippageModel: 'FIXED_BPS',
     slippageBps: 5, // 5 bps = 0.05%
@@ -27,6 +27,16 @@ export const BacktestingLabView: React.FC<BacktestingLabViewProps> = ({ bars, sy
   });
 
   const [activeTab, setActiveTab] = useState<'metrics' | 'walk_forward' | 'trades'>('metrics');
+
+  useEffect(() => {
+    if (bars.length === 0) return;
+    setParams((prev) => ({
+      ...prev,
+      symbol,
+      startDate: new Date(bars[0].timestamp).toISOString().slice(0, 10),
+      endDate: new Date(bars[bars.length - 1].timestamp).toISOString().slice(0, 10),
+    }));
+  }, [symbol]);
 
   const backtestResult: BacktestRunResult = useMemo(() => {
     return runFullBacktest(bars, { ...params, symbol });
