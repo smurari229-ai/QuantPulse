@@ -94,6 +94,7 @@ export function validateMarketDataSeries(bars: OHLCV[]): MarketValidationResult 
 // Simulated snapshot generator with configurable latency and bid/ask spread.
 // This is not a live exchange feed.
 export function getLiveSnapshot(symbol: string, lastClose: number, options?: { isStale?: boolean; latencyMs?: number; injectAnomaly?: boolean }): MarketDataSnapshot {
+  if (!SUPPORTED_INSTRUMENTS.some((instrument) => instrument.symbol === symbol)) throw new Error(`Unsupported market-data symbol: ${symbol}`);
   if (!Number.isFinite(lastClose) || lastClose <= 0) throw new Error('lastClose must be a finite value greater than zero.');
   const spreadBps = 4;
   const halfSpread = (lastClose * spreadBps) / 20000;
