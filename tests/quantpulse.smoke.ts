@@ -107,7 +107,7 @@ let unsupportedSymbolRejected = false;
 try { getLiveSnapshot('UNSUPPORTED', 100); } catch { unsupportedSymbolRejected = true; }
 assert(unsupportedSymbolRejected, 'unsupported market-data symbol is rejected');
 const audit = new AuditLogChain();
-audit.appendRecord('ORDER_REJECTED', 'RISK_ENGINE', { nested: { apiKey: 'should-not-leak', safe: 'ok' } });
+audit.appendRecord('RISK_GATE_REJECTED', 'RISK_ENGINE', { nested: { apiKey: 'should-not-leak', safe: 'ok' } });
 assert(audit.verifyIntegrity().isValid, 'audit chain remains valid after sanitized record append');
 const auditRecords = audit.getRecords(99999);
 assert(auditRecords.length <= 1000, 'audit record retrieval limit is bounded');
