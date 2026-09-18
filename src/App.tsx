@@ -88,7 +88,7 @@ export default function App() {
       stopLossPrice: referencePrice * 0.96, takeProfitPrice: referencePrice * 1.08,
       executionMode: 'PAPER', timestamp: Date.now(),
     };
-    setCurrentVerdict(evaluateRiskGates(dummyOrder, portfolio, marketSnapshot, riskContext, DEFAULT_RISK_CONFIG));
+    setCurrentVerdict(evaluateRiskGates(dummyOrder, portfolio, marketSnapshot, riskContext, riskConfig));
   }, [selectedSymbol, marketSnapshot, portfolio, riskContext, riskConfig]);
 
   const handleSelectSymbol = useCallback((newSymbol: string) => {
