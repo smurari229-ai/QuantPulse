@@ -39,7 +39,7 @@ export function executePaperOrder(order: OrderRequest, currentPortfolio: Portfol
   if (options?.isExecutionHalted) return reject(order, currentPortfolio, 'Paper execution is halted by the active kill switch.');
   if (order.executionMode !== 'PAPER') return reject(order, currentPortfolio, 'Paper simulator accepts PAPER execution mode only; live/offline routing is blocked.');
   if (order.side !== 'BUY' && order.side !== 'SELL') return reject(order, currentPortfolio, 'Order side must be BUY or SELL.');
-  if (order.type !== 'MARKET' && order.type !== 'LIMIT' && order.type !== 'STOP_MARKET') return reject(order, currentPortfolio, 'Unsupported order type.');
+  if (order.type !== 'MARKET' && order.type !== 'LIMIT') return reject(order, currentPortfolio, `Unsupported order type: ${order.type}.`);
   if (!Number.isFinite(order.quantity) || order.quantity <= 0) return reject(order, currentPortfolio, 'Order quantity must be a positive finite number.');
   if (typeof order.symbol !== 'string' || order.symbol.trim().length === 0) return reject(order, currentPortfolio, 'Order symbol is required.');
   if (order.symbol !== marketSnapshot.symbol) return reject(order, currentPortfolio, 'Order symbol does not match the supplied market snapshot.');
@@ -71,8 +71,6 @@ export function executePaperOrder(order: OrderRequest, currentPortfolio: Portfol
     const marketable = order.side === 'BUY' ? marketSnapshot.ask <= limitPrice : marketSnapshot.bid >= limitPrice;
     if (!marketable) return reject(order, currentPortfolio, `Limit order is not marketable at current quote (bid $${marketSnapshot.bid.toFixed(2)}, ask $${marketSnapshot.ask.toFixed(2)}, limit $${limitPrice.toFixed(2)}). Pending limit orders are not supported by this paper simulator.`);
     rawPrice = order.side === 'BUY' ? marketSnapshot.ask : marketSnapshot.bid;
-  } else if (order.type === 'STOP_MARKET') {
-    return reject(order, currentPortfolio, 'STOP_MARKET orders are not supported by the current paper simulator because no separate trigger-price field is defined.');
   } else {
     rawPrice = order.estimatedPrice ?? (order.side === 'BUY' ? marketSnapshot.ask : marketSnapshot.bid);
   }
