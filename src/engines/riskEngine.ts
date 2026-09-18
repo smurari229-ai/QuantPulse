@@ -123,10 +123,15 @@ export function evaluateRiskGates(
       && Number.isFinite(position.quantity) && position.quantity >= 0
       && Number.isFinite(position.marketValue) && position.marketValue >= 0
     );
-  const notional = order.quantity * referencePrice;
-  const positionPct = portfolio.equity > 0 ? (notional / portfolio.equity) * 100 : 100;
+  const orderNotional = order.quantity * referencePrice;
+  const existingPosition = portfolio.positions.find((position) => position.symbol === order.symbol);
+  const existingPositionNotional = existingPosition?.marketValue ?? 0;
+  const projectedPositionNotional = order.side === 'SELL'
+    ? Math.max(0, existingPositionNotional - orderNotional)
+    : existingPositionNotional + orderNotional;
+  const positionPct = portfolio.equity > 0 ? (projectedPositionNotional / portfolio.equity) * 100 : 100;
   const currentInvested = portfolio.positions.reduce((sum, p) => sum + p.marketValue, 0);
-  const exposureDelta = order.side === 'SELL' ? -notional : notional;
+  const exposureDelta = order.side === 'SELL' ? -Math.min(orderNotional, existingPositionNotional) : orderNotional;
   const projectedInvested = Math.max(0, currentInvested + exposureDelta);
   const projectedExposurePct = portfolio.equity > 0 ? (projectedInvested / portfolio.equity) * 100 : 100;
 
@@ -145,8 +150,8 @@ export function evaluateRiskGates(
   checks.push({ checkName: 'MARKET_ABNORMALITY_CIRCUIT_BREAKER', passed: passedKillSwitch, severity: 'CRITICAL_REJECT', currentValue: context.isEmergencyKillSwitchActive ? 'ACTIVE_HALTED' : 'NORMAL', thresholdLimit: 'NORMAL', reason: passedKillSwitch ? 'Emergency kill switch is disengaged.' : 'CRITICAL: Emergency Kill Switch is engaged. All trading is strictly halted.' });
   if (!passedKillSwitch) rejectionReasons.push('Emergency Kill Switch is currently engaged.');
 
-  const passedMaxNotional = notional <= config.maxPositionSizeNotional;
-  checks.push({ checkName: 'MAX_POSITION_NOTIONAL', passed: passedMaxNotional, severity: 'CRITICAL_REJECT', currentValue: `$${Math.round(notional).toLocaleString()}`, thresholdLimit: `$${config.maxPositionSizeNotional.toLocaleString()}`, reason: passedMaxNotional ? 'Order notional is within individual position limits.' : `Order notional ($${Math.round(notional).toLocaleString()}) exceeds maximum permitted ($${config.maxPositionSizeNotional.toLocaleString()}).` });
+  const passedMaxNotional = projectedPositionNotional <= config.maxPositionSizeNotional;
+  checks.push({ checkName: 'MAX_POSITION_NOTIONAL', passed: passedMaxNotional, severity: 'CRITICAL_REJECT', currentValue: `${Math.round(projectedPositionNotional).toLocaleString()}`, thresholdLimit: `$${config.maxPositionSizeNotional.toLocaleString()}`, reason: passedMaxNotional ? 'Projected position notional is within the individual position limit.' : `Projected position notional (${Math.round(projectedPositionNotional).toLocaleString()}) exceeds maximum permitted (${config.maxPositionSizeNotional.toLocaleString()}).` });
   if (!passedMaxNotional) rejectionReasons.push(`Position size exceeds $${config.maxPositionSizeNotional.toLocaleString()}`);
 
   const passedMaxPositionPct = positionPct <= config.maxPositionPctOfPortfolio;
