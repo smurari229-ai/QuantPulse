@@ -1,11 +1,13 @@
 import React, { useState } from 'react';
 import { RiskValidationVerdict, OrderRequest, PortfolioState } from '../../types/order';
 import { MarketDataSnapshot } from '../../types/market';
+import { RiskEngineConfig } from '../../types/risk';
 import { evaluateRiskGates, DEFAULT_RISK_CONFIG, RecentOrderContext } from '../../engines/riskEngine';
 import { ShieldCheck, ShieldAlert, AlertTriangle, CheckCircle2, XCircle, Sliders, Play } from 'lucide-react';
 
 interface RiskMonitorViewProps {
   currentVerdict: RiskValidationVerdict;
+  riskConfig: RiskEngineConfig;
   portfolio: PortfolioState;
   marketSnapshot: MarketDataSnapshot;
   riskContext: RecentOrderContext;
@@ -14,6 +16,7 @@ interface RiskMonitorViewProps {
 
 export const RiskMonitorView: React.FC<RiskMonitorViewProps> = ({
   currentVerdict,
+  riskConfig,
   portfolio,
   marketSnapshot,
   riskContext,
@@ -44,7 +47,7 @@ export const RiskMonitorView: React.FC<RiskMonitorViewProps> = ({
       aiDecisionId: 'AI-TEST-INTERACTIVE',
     };
 
-    const verdict = evaluateRiskGates(testOrder, portfolio, marketSnapshot, riskContext, DEFAULT_RISK_CONFIG);
+    const verdict = evaluateRiskGates(testOrder, portfolio, marketSnapshot, riskContext, riskConfig);
     onNewVerdict(verdict);
   };
 
