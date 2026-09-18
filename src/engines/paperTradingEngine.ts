@@ -42,7 +42,6 @@ export function executePaperOrder(order: OrderRequest, currentPortfolio: Portfol
   if (order.symbol !== marketSnapshot.symbol) return reject(order, currentPortfolio, 'Order symbol does not match the supplied market snapshot.');
   if (!Number.isFinite(order.timestamp) || order.timestamp <= 0) return reject(order, currentPortfolio, 'Order timestamp must be a positive finite number.');
   if (!Number.isFinite(currentPortfolio.cash) || !Number.isFinite(currentPortfolio.equity) || currentPortfolio.cash < 0 || currentPortfolio.equity <= 0) return reject(order, currentPortfolio, 'Current paper portfolio state is invalid.');
-  if (marketSnapshot.symbol !== order.symbol) return reject(order, currentPortfolio, 'Order symbol does not match the supplied market snapshot.');
   if (marketSnapshot.dataQuality.isValidated !== true || marketSnapshot.dataQuality.isStale) return reject(order, currentPortfolio, 'Market snapshot is not validated or is stale.');
   if (!Number.isFinite(marketSnapshot.lastPrice) || marketSnapshot.lastPrice <= 0 || marketSnapshot.bid <= 0 || marketSnapshot.ask <= 0 || marketSnapshot.ask < marketSnapshot.bid) return reject(order, currentPortfolio, 'Invalid market bid/ask/last-price data.');
 
