@@ -105,6 +105,10 @@ const futureDuplicateVerdict = evaluateRiskGates(
 );
 assert(futureDuplicateVerdict.checks.find(c => c.checkName === 'DUPLICATE_ORDER_DETECTION')?.passed, 'future order record is not misclassified as a duplicate');
 
+const maxNotionalOrder: OrderRequest = { ...baseOrder, id: 'SMOKE-NOTIONAL-01', orderId: 'SMOKE-NOTIONAL-01', clientOrderId: 'SMOKE-NOTIONAL-CLI-01', quantity: 20, estimatedPrice: 2000 };
+const maxNotionalVerdict = evaluateRiskGates(maxNotionalOrder, INITIAL_PORTFOLIO_STATE, snapshot);
+assert(!maxNotionalVerdict.isApproved && maxNotionalVerdict.checks.some(c => c.checkName === 'MAX_POSITION_NOTIONAL' && !c.passed), 'max position notional gate rejects a $40,000 order against the $25,000 default ceiling');
+
 const customRiskConfig = { ...DEFAULT_RISK_CONFIG, maxPositionSizeNotional: 1 };
 const settingsDrivenVerdict = evaluateRiskGates(baseOrder, INITIAL_PORTFOLIO_STATE, snapshot, undefined, customRiskConfig);
 const invalidConfigVerdict = evaluateRiskGates(baseOrder, INITIAL_PORTFOLIO_STATE, snapshot, undefined, { ...DEFAULT_RISK_CONFIG, maxSpreadBps: Number.NaN });
