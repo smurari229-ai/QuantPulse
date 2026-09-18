@@ -112,6 +112,9 @@ assert(auditRecords.length <= 1000, 'audit record retrieval limit is bounded');
 let invalidWalkForwardRejected = false;
 try { runFullBacktest(bars, { symbol: 'NIFTY50', initialCapital: 100000, outOfSampleSplitRatio: 0.2, positionSizingPct: 10, slippageBps: 5, commissionRatePct: 0.1, taxRatePct: 0, slippageModel: 'FIXED_BPS', enableWalkForward: true, walkForwardFolds: 1 } as BacktestParameters); } catch { invalidWalkForwardRejected = true; }
 assert(invalidWalkForwardRejected, 'invalid walk-forward fold count is rejected');
+let unsupportedBacktestSymbolRejected = false;
+try { runFullBacktest(bars, { symbol: 'UNSUPPORTED', initialCapital: 100000, outOfSampleSplitRatio: 0.2, positionSizingPct: 10, slippageBps: 5, commissionRatePct: 0.1, taxRatePct: 0, slippageModel: 'FIXED_BPS', enableWalkForward: true, walkForwardFolds: 3 } as BacktestParameters); } catch { unsupportedBacktestSymbolRejected = true; }
+assert(unsupportedBacktestSymbolRejected, 'unsupported backtest symbol is rejected by the input guard');
 assert(!settingsDrivenVerdict.isApproved, 'runtime risk evaluation enforces the supplied saved risk boundary');
 assert(settingsDrivenVerdict.rejectionReasons.some(reason => reason.includes('Position size exceeds $1')), 'runtime verdict reflects supplied saved notional boundary');
 
