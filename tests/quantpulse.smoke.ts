@@ -54,6 +54,7 @@ const negativeVolumeValidation = validateMarketDataSeries(negativeVolumeBars);
 assert(!negativeVolumeValidation.isValid && negativeVolumeValidation.errors.some(e => e.includes('Negative volume')), 'negative market volume is rejected');
 
 const snapshot = generateMarketSnapshot('NIFTY50', bars[bars.length - 1].close);
+const riskSafeSnapshot = { ...snapshot, timestamp: Date.now(), dataQuality: { ...snapshot.dataQuality, isStale: false, latencyMs: 45, isValidated: true } };
 
 const baseOrder: OrderRequest = {
   id: 'SMOKE-01', orderId: 'SMOKE-01', clientOrderId: 'SMOKE-CLI-01', symbol: 'NIFTY50', side: 'BUY',
@@ -197,16 +198,16 @@ const tamperRecord = auditLedger.getAllRecords(2)[0];
 tamperRecord.details.symbol = 'TAMPERED';
 assert(!auditLedger.verifyChainIntegrity(), 'audit chain detects record tampering');
 
-const directBuyRiskVerdict = evaluateRiskGates(baseOrder, INITIAL_PORTFOLIO_STATE, snapshot);
+const directBuyRiskVerdict = evaluateRiskGates(baseOrder, INITIAL_PORTFOLIO_STATE, riskSafeSnapshot);
 assert(directBuyRiskVerdict.isApproved, `baseline paper BUY risk preflight approves: ${directBuyRiskVerdict.rejectionReasons.join(' | ')}`);
-const buyResult = executePaperOrder(baseOrder, INITIAL_PORTFOLIO_STATE, snapshot);
+const buyResult = executePaperOrder(baseOrder, INITIAL_PORTFOLIO_STATE, riskSafeSnapshot);
 assert(buyResult.status === 'FILLED' && buyResult.updatedPortfolio.positions.length === 1, 'paper BUY creates a position');
 const held = buyResult.updatedPortfolio.positions[0];
 const sellOrder: OrderRequest = {
   ...baseOrder, id: 'SMOKE-02', orderId: 'SMOKE-02', clientOrderId: 'SMOKE-CLI-02', side: 'SELL', quantity: held.quantity,
   stopLossPrice: snapshot.lastPrice * 1.04, takeProfitPrice: snapshot.lastPrice * 0.92,
 };
-const sellResult = executePaperOrder(sellOrder, buyResult.updatedPortfolio, snapshot);
+const sellResult = executePaperOrder(sellOrder, buyResult.updatedPortfolio, riskSafeSnapshot);
 assert(sellResult.status === 'FILLED' && sellResult.updatedPortfolio.positions.length === 0, 'paper SELL closes the held position');
 const invalidSell = executePaperOrder(sellOrder, INITIAL_PORTFOLIO_STATE, snapshot);
 assert(invalidSell.status === 'REJECTED', 'paper SELL without a position is rejected');
