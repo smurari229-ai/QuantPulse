@@ -21,7 +21,7 @@ export function generateAIDecision(features: AIFeatureInput): AIDecisionOutput {
   ];
   const hasInvalidInput = numericInputs.some((value) => !Number.isFinite(value));
 
-  if (hasInvalidInput || currentPrice <= 0 || indicators.atr14 < 0 || indicators.relativeVolume < 0) {
+  if (hasInvalidInput || currentPrice <= 0 || indicators.atr14 < 0 || indicators.relativeVolume < 0 || indicators.rsi14 < 0 || indicators.rsi14 > 100 || currentMarketConditions.spreadBps < 0 || currentMarketConditions.dataStalenessMs < 0) {
     return {
       signal: 'NO_TRADE',
       confidence: 0,
