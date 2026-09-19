@@ -2,6 +2,7 @@ import { OrderFill, OrderRequest, PortfolioState } from '../types/order';
 import { MarketDataSnapshot } from '../types/market';
 import { createOrderLifecycle, OrderLifecycle, transitionOrder } from './orderStateMachine';
 import { applyPaperFill } from './paperFillEngine';
+import { GlobalAuditLedger } from './auditEngine';
 
 export interface PaperExecutionOrder {
   order: OrderRequest;
@@ -103,6 +104,7 @@ export class PaperExecutionLedger {
       }
     }
     this.processedEventIds.add(eventId);
+    GlobalAuditLedger.appendRecord('ORDER_SUBMITTED', 'PAPER_BROKER', { orderId: order.id, clientOrderId: order.clientOrderId, quantity: order.quantity, eventId });
     return { success: true, order: execution };
   }
 
@@ -158,7 +160,10 @@ export class PaperExecutionLedger {
     this.fillIds.add(fill.fillId);
     if (fill.brokerOrderId) this.brokerOrderIds.set(fill.brokerOrderId, orderId);
     this.processedEventIds.add(eventId);
-
+    GlobalAuditLedger.appendRecord(target === 'FILLED' ? 'ORDER_FILLED' : 'ORDER_PARTIALLY_FILLED', 'PAPER_BROKER', {
+      orderId, clientOrderId: execution.order.clientOrderId, fillId: fill.fillId, brokerOrderId: fill.brokerOrderId,
+      fillQuantity: fill.quantity, filledQuantity: execution.filledQuantity, remainingQuantity: execution.remainingQuantity, eventId,
+    });
     return { success: true, order: execution, portfolio: updatedPortfolio };
   }
 
@@ -186,6 +191,7 @@ export class PaperExecutionLedger {
     }
     execution.remainingQuantity = 0;
     this.processedEventIds.add(eventId);
+    GlobalAuditLedger.appendRecord('ORDER_CANCELLED', 'PAPER_BROKER', { orderId, clientOrderId: execution.order.clientOrderId, filledQuantity: execution.filledQuantity, eventId });
     return { success: true, order: execution };
   }
 
