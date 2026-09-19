@@ -340,12 +340,20 @@ assert(directBuyRiskVerdict.isApproved, `baseline paper BUY risk preflight appro
 const buyResult = executePaperOrder(baseOrder, INITIAL_PORTFOLIO_STATE, riskSafeSnapshot);
 assert(buyResult.status === 'FILLED' && buyResult.updatedPortfolio.positions.length === 1, 'paper BUY creates a position');
 const held = buyResult.updatedPortfolio.positions[0];
+const buyPnlInvariant = buyResult.updatedPortfolio.equity - (buyResult.updatedPortfolio.initialCapital + buyResult.updatedPortfolio.totalRealizedPnL + buyResult.updatedPortfolio.totalUnrealizedPnL);
+assert(Math.abs(buyPnlInvariant) < 0.01, 'paper BUY accounting invariant: equity equals capital plus realized plus unrealized P&L');
+assert(held.entryCharges > 0, 'paper position retains entry-side charges for future P&L accounting');
+
 const sellOrder: OrderRequest = {
   ...baseOrder, id: 'SMOKE-02', orderId: 'SMOKE-02', clientOrderId: 'SMOKE-CLI-02', side: 'SELL', quantity: held.quantity,
   stopLossPrice: snapshot.lastPrice * 1.04, takeProfitPrice: snapshot.lastPrice * 0.92,
 };
 const sellResult = executePaperOrder(sellOrder, buyResult.updatedPortfolio, riskSafeSnapshot);
 assert(sellResult.status === 'FILLED' && sellResult.updatedPortfolio.positions.length === 0, 'paper SELL closes the held position');
+const sellPnlInvariant = sellResult.updatedPortfolio.equity - (sellResult.updatedPortfolio.initialCapital + sellResult.updatedPortfolio.totalRealizedPnL + sellResult.updatedPortfolio.totalUnrealizedPnL);
+assert(Math.abs(sellPnlInvariant) < 0.01, 'paper SELL accounting invariant: equity equals capital plus realized plus unrealized P&L');
+assert(Math.abs(sellResult.updatedPortfolio.totalUnrealizedPnL) < 0.01, 'fully closed paper position has no residual unrealized P&L');
+
 const invalidSell = executePaperOrder(sellOrder, INITIAL_PORTFOLIO_STATE, snapshot);
 assert(invalidSell.status === 'REJECTED', 'paper SELL without a position is rejected');
 
