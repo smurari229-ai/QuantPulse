@@ -37,7 +37,7 @@ export const PaperTradingView: React.FC<PaperTradingViewProps> = ({ portfolio, r
   useEffect(() => {
     killSwitchRef.current = isEmergencyKillSwitchActive;
   }, [isEmergencyKillSwitchActive]);
-  const referencePrice = orderType === 'LIMIT' ? limitPrice : marketSnapshot.lastPrice;
+  // Use the same conservative executable quote for both risk preflight and paper fill.\n  const referencePrice = orderType === 'LIMIT' ? limitPrice : (side === 'BUY' ? marketSnapshot.ask : marketSnapshot.bid);
   const notionalValue = quantity * referencePrice;
   const estimatedSlippage = notionalValue * 0.00045;
   const estimatedBrokerage = notionalValue * 0.0003;
@@ -48,7 +48,7 @@ export const PaperTradingView: React.FC<PaperTradingViewProps> = ({ portfolio, r
     if (!Number.isFinite(quantity) || quantity <= 0 || !Number.isFinite(referencePrice) || referencePrice <= 0) return;
     setIsSubmitting(true);
     const id = `ORD-${Date.now().toString().slice(-6)}`;
-    const proposedOrder: OrderRequest = { id, orderId: id, clientOrderId: `CLI-${Date.now()}`, symbol, side, type: orderType, quantity, limitPrice: orderType === 'LIMIT' ? limitPrice : marketSnapshot.lastPrice, stopLossPrice, takeProfitPrice, executionMode: 'PAPER', timestamp: Date.now(), aiDecisionId: 'MANUAL_PAPER_DESK' };
+    const proposedOrder: OrderRequest = { id, orderId: id, clientOrderId: `CLI-${Date.now()}`, symbol, side, type: orderType, quantity, limitPrice: orderType === 'LIMIT' ? limitPrice : undefined, estimatedPrice: orderType === 'MARKET' ? referencePrice : undefined, stopLossPrice, takeProfitPrice, executionMode: 'PAPER', timestamp: Date.now(), aiDecisionId: 'MANUAL_PAPER_DESK' };
     const verdict = evaluateRiskGates(proposedOrder, portfolio, marketSnapshot, { ...riskContext, isEmergencyKillSwitchActive }, riskConfig);
     onRiskVerdictGenerated(verdict);
     if (!verdict.isApproved) { setExecutionLog(prev => [`[${new Date().toLocaleTimeString()}] REJECTED by Risk Engine: ${verdict.rejectionReasons.join('; ')}`, ...prev]); setIsSubmitting(false); return; }
