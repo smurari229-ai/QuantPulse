@@ -6,6 +6,7 @@ import { triggerEmergencyKillSwitch, resetKillSwitchWithVerification, canSubmitO
 import { runFullBacktest } from '../src/engines/backtestingLab';
 import { evaluateStrategySignal, REGISTERED_STRATEGIES } from '../src/engines/strategyEngine';
 import { AuditLogChain } from '../src/engines/auditEngine';
+import { generateAIDecision } from '../src/engines/aiDecisionEngine';
 import type { OrderRequest } from '../src/types/order';
 import type { BacktestParameters } from '../src/types/backtest';
 
@@ -52,6 +53,16 @@ const negativeVolumeBars = bars.map((bar) => ({ ...bar }));
 negativeVolumeBars[7].volume = -1;
 const negativeVolumeValidation = validateMarketDataSeries(negativeVolumeBars);
 assert(!negativeVolumeValidation.isValid && negativeVolumeValidation.errors.some(e => e.includes('Negative volume')), 'negative market volume is rejected');
+
+const aiTestInput = {
+  symbol: 'NIFTY50', timestamp: Date.now(), currentPrice: 1000,
+  indicators: { ema20: 1010, ema50: 1000, ema200: 990, rsi14: 55, atr14: 10, relativeVolume: 1.1, marketRegime: 'TRENDING' },
+  currentMarketConditions: { spreadBps: 5, dataStalenessMs: 0 },
+};
+const staleAiDecision = generateAIDecision({ ...aiTestInput, currentMarketConditions: { spreadBps: 5, dataStalenessMs: 3001 } });
+assert(staleAiDecision.signal === 'NO_TRADE' && staleAiDecision.confidence === 0, 'AI decision fails closed when market data is stale');
+const invalidTelemetryAiDecision = generateAIDecision({ ...aiTestInput, currentMarketConditions: { spreadBps: -1, dataStalenessMs: 0 } });
+assert(invalidTelemetryAiDecision.signal === 'NO_TRADE' && invalidTelemetryAiDecision.confidence === 0, 'AI decision fails closed on invalid market telemetry');
 
 const snapshot = generateMarketSnapshot('NIFTY50', bars[bars.length - 1].close);
 const riskSafeSnapshot = { ...snapshot, timestamp: Date.now(), dataQuality: { ...snapshot.dataQuality, isStale: false, latencyMs: 45, isValidated: true } };
