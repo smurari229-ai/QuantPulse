@@ -37,7 +37,8 @@ export const PaperTradingView: React.FC<PaperTradingViewProps> = ({ portfolio, r
   useEffect(() => {
     killSwitchRef.current = isEmergencyKillSwitchActive;
   }, [isEmergencyKillSwitchActive]);
-  // Use the same conservative executable quote for both risk preflight and paper fill.\n  const referencePrice = orderType === 'LIMIT' ? limitPrice : (side === 'BUY' ? marketSnapshot.ask : marketSnapshot.bid);
+  // Use the same conservative executable quote for both risk preflight and paper fill.
+  const referencePrice = orderType === 'LIMIT' ? limitPrice : (side === 'BUY' ? marketSnapshot.ask : marketSnapshot.bid);
   const notionalValue = quantity * referencePrice;
   const estimatedSlippage = notionalValue * 0.00045;
   const estimatedBrokerage = notionalValue * 0.0003;
