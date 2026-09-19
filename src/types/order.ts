@@ -66,6 +66,8 @@ export interface Position {
   unrealizedPnL: number;
   unrealizedPnLPct: number;
   realizedPnL: number;
+  /** Entry-side charges allocated to the remaining open quantity. */
+  entryCharges: number;
   stopLossPrice: number;
   takeProfitPrice: number;
   notionalExposurePct: number;
