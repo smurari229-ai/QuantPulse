@@ -10,10 +10,40 @@ import { generateAIDecision } from '../src/engines/aiDecisionEngine';
 import { AuditLogChain } from '../src/engines/auditEngine';
 import type { OrderRequest } from '../src/types/order';
 import type { BacktestParameters } from '../src/types/backtest';
+import { createOrderLifecycle, transitionOrder } from '../src/engines/orderStateMachine';
 
 function assert(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(`SMOKE TEST FAILED: ${message}`);
 }
+
+const lifecycle0 = createOrderLifecycle('SMOKE-ORDER-LIFECYCLE');
+const lifecycle1 = transitionOrder(lifecycle0, 'VALIDATED', 'evt-1');
+assert(lifecycle1.success && lifecycle1.lifecycle.state === 'VALIDATED', 'order lifecycle accepts CREATED -> VALIDATED');
+const lifecycle2 = transitionOrder(lifecycle1.lifecycle, 'SUBMITTED', 'evt-2');
+assert(lifecycle2.success && lifecycle2.lifecycle.state === 'SUBMITTED', 'order lifecycle accepts VALIDATED -> SUBMITTED');
+const lifecycle3 = transitionOrder(lifecycle2.lifecycle, 'ACKNOWLEDGED', 'evt-3');
+assert(lifecycle3.success && lifecycle3.lifecycle.state === 'ACKNOWLEDGED', 'order lifecycle accepts SUBMITTED -> ACKNOWLEDGED');
+const lifecycle4 = transitionOrder(lifecycle3.lifecycle, 'PARTIALLY_FILLED', 'evt-4');
+assert(lifecycle4.success && lifecycle4.lifecycle.state === 'PARTIALLY_FILLED', 'order lifecycle accepts ACKNOWLEDGED -> PARTIALLY_FILLED');
+const lifecycle5 = transitionOrder(lifecycle4.lifecycle, 'FILLED', 'evt-5');
+assert(lifecycle5.success && lifecycle5.lifecycle.state === 'FILLED', 'order lifecycle accepts PARTIALLY_FILLED -> FILLED');
+const invalidAfterFill = transitionOrder(lifecycle5.lifecycle, 'SUBMITTED', 'evt-6');
+assert(!invalidAfterFill.success && invalidAfterFill.lifecycle.state === 'FILLED', 'terminal FILLED state rejects backward transition');
+const duplicateEvent = transitionOrder(lifecycle4.lifecycle, 'FILLED', 'evt-4');
+assert(!duplicateEvent.success && duplicateEvent.lifecycle.state === 'PARTIALLY_FILLED', 'duplicate lifecycle event cannot mutate order state');
+const cancelFlow1 = transitionOrder(createOrderLifecycle('SMOKE-CANCEL'), 'VALIDATED', 'c1');
+const cancelFlow2 = transitionOrder(cancelFlow1.lifecycle, 'SUBMITTED', 'c2');
+const cancelFlow3 = transitionOrder(cancelFlow2.lifecycle, 'ACKNOWLEDGED', 'c3');
+const cancelFlow4 = transitionOrder(cancelFlow3.lifecycle, 'CANCEL_REQUESTED', 'c4');
+assert(cancelFlow4.success, 'acknowledged order can request cancellation');
+const cancelled = transitionOrder(cancelFlow4.lifecycle, 'CANCELLED', 'c5');
+assert(cancelled.success && cancelled.lifecycle.state === 'CANCELLED', 'cancel request can become cancelled');
+const lateFill = transitionOrder(cancelled.lifecycle, 'FILLED', 'c6');
+assert(!lateFill.success && lateFill.lifecycle.state === 'CANCELLED', 'late fill after cancellation is rejected');
+const rejectionFlow = transitionOrder(createOrderLifecycle('SMOKE-REJECT'), 'REJECTED', 'r1');
+assert(rejectionFlow.success, 'created order can be rejected');
+const rejectedAck = transitionOrder(rejectionFlow.lifecycle, 'ACKNOWLEDGED', 'r2');
+assert(!rejectedAck.success && rejectedAck.lifecycle.state === 'REJECTED', 'rejected order cannot later be acknowledged');
 
 const bars = generateSyntheticDailyBars('NIFTY50', 120);
 assert(bars.length === 120, 'synthetic market generator returns requested bar count');
