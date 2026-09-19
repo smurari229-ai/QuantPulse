@@ -253,6 +253,10 @@ assert(!badReset.success && badReset.updatedState.isEmergencyStopTripped, 'wrong
 const goodReset = resetKillSwitchWithVerification(killState, killState.resetConfirmationCode);
 assert(goodReset.success && !goodReset.updatedState.isEmergencyStopTripped, 'correct reset code re-arms sandbox');
 
+const manuallyLockedState = { ...INITIAL_KILL_SWITCH_STATE, isGlobalTradingOff: true, requiresManualReset: false };
+const unauthorizedOperationalReset = resetKillSwitchWithVerification(manuallyLockedState, '');
+assert(!unauthorizedOperationalReset.success && unauthorizedOperationalReset.updatedState.isGlobalTradingOff, 'active operational lock cannot be cleared without out-of-band authorization even when reset flag is malformed');
+
 const emaFixture = [10, 11, 12, 13, 14];
 const ema = calculateEMA(emaFixture, 3);
 assert(ema.length === emaFixture.length && Math.abs(ema[1] - 10.5) < 1e-10 && Math.abs(ema[4] - 13.0625) < 1e-10, 'EMA matches the recursive mathematical formula on a known fixture');
