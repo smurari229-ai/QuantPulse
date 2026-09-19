@@ -1,5 +1,6 @@
 import { PaperExecutionLedger } from '../src/engines/paperExecutionLedger';
 import { generateAIDecision } from '../src/engines/aiDecisionEngine';
+import { validateDecision, validateInput } from '../api/ai-decision';
 import { generateMarketSnapshot } from '../src/engines/marketDataEngine';
 import { INITIAL_PORTFOLIO_STATE } from '../src/engines/paperTradingEngine';
 import { DEFAULT_RISK_CONFIG, evaluateRiskGates } from '../src/engines/riskEngine';
@@ -80,6 +81,19 @@ const invalidRsi = generateAIDecision({ ...aiBase, indicators: { ...aiBase.indic
 assert(invalidRsi.signal === 'NO_TRADE' && invalidRsi.confidence === 0, 'AI rejects out-of-range RSI');
 const negativeSpread = generateAIDecision({ ...aiBase, currentMarketConditions: { ...aiBase.currentMarketConditions, spreadBps: -1 } });
 assert(negativeSpread.signal === 'NO_TRADE' && negativeSpread.confidence === 0, 'AI rejects negative spread');
+let apiInvalidRsi = false;
+try { validateInput({ ...aiBase, indicators: { ...aiBase.indicators, rsi14: 101 } }); } catch { apiInvalidRsi = true; }
+assert(apiInvalidRsi, 'AI API validator rejects out-of-range RSI');
+let apiNegativeVolume = false;
+try { validateInput({ ...aiBase, indicators: { ...aiBase.indicators, relativeVolume: -1 } }); } catch { apiNegativeVolume = true; }
+assert(apiNegativeVolume, 'AI API validator rejects negative relative volume');
+let apiBadNews = false;
+try { validateInput({ ...aiBase, newsSentiment: { headline: 'x', score: 2, source: 'test', timestamp: Date.now() } }); } catch { apiBadNews = true; }
+assert(apiBadNews, 'AI API validator rejects out-of-range news sentiment');
+let apiBadDecision = false;
+try { validateDecision({ signal: 'LIVE_TRADE', confidence: 2, reasoning: 'bad', strategy: 'bad', risk_flags: [], required_checks: [] }); } catch { apiBadDecision = true; }
+assert(apiBadDecision, 'AI API decision validator rejects invalid signals and confidence');
+
 
 
 const failureOrder: OrderRequest = { ...order, id: 'FAILURE-MATRIX', orderId: 'FAILURE-MATRIX', clientOrderId: 'FAILURE-MATRIX-CLIENT', quantity: 1, stopLossPrice: 95, takeProfitPrice: 110 };
