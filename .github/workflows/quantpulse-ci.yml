@@ -2,7 +2,7 @@ name: QuantPulse CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, deep-audit-phase1-2026-09-19]
   pull_request:
     branches: [main]
 
