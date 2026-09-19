@@ -25,7 +25,12 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     if (!Number.isFinite(nextConfig.maxPortfolioExposurePct) || nextConfig.maxPortfolioExposurePct <= 0 || nextConfig.maxPortfolioExposurePct > 100) return 'Max portfolio exposure must be between 0 and 100.';
     if (!Number.isFinite(nextConfig.maxDailyLossPct) || nextConfig.maxDailyLossPct <= 0 || nextConfig.maxDailyLossPct > 100) return 'Max daily loss must be between 0 and 100.';
     if (!Number.isFinite(nextConfig.maxDrawdownHaltPct) || nextConfig.maxDrawdownHaltPct <= 0 || nextConfig.maxDrawdownHaltPct > 100) return 'Max drawdown halt must be between 0 and 100.';
+    if (!Number.isFinite(nextConfig.maxTradesPerDay) || nextConfig.maxTradesPerDay <= 0) return 'Max trades per day must be a finite value greater than 0.';
+    if (!Number.isFinite(nextConfig.minOrderIntervalSeconds) || nextConfig.minOrderIntervalSeconds < 0) return 'Minimum order interval must be a finite non-negative value.';
+    if (!Number.isFinite(nextConfig.minRiskRewardRatio) || nextConfig.minRiskRewardRatio <= 0) return 'Minimum risk/reward ratio must be a finite value greater than 0.';
+    if (!Number.isFinite(nextConfig.maxEstimatedSlippageBps) || nextConfig.maxEstimatedSlippageBps < 0) return 'Max estimated slippage must be a finite non-negative value.';
     if (!Number.isFinite(nextConfig.maxSpreadBps) || nextConfig.maxSpreadBps <= 0) return 'Max spread must be a finite value greater than 0.';
+    if (!Number.isFinite(nextConfig.enforceDuplicateWindowSeconds) || nextConfig.enforceDuplicateWindowSeconds < 0) return 'Duplicate-order window must be a finite non-negative value.';
     if (!Number.isFinite(nextConfig.maxDataStalenessMs) || nextConfig.maxDataStalenessMs <= 0) return 'Max data staleness must be a finite value greater than 0.';
     return null;
   };

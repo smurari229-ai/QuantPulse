@@ -6,6 +6,7 @@ import { triggerEmergencyKillSwitch, resetKillSwitchWithVerification, canSubmitO
 import { runFullBacktest } from '../src/engines/backtestingLab';
 import { evaluateStrategySignal, REGISTERED_STRATEGIES } from '../src/engines/strategyEngine';
 import { AuditLogChain } from '../src/engines/auditEngine';
+import { generateAIDecision } from '../src/engines/aiDecisionEngine';
 import type { OrderRequest } from '../src/types/order';
 import type { BacktestParameters } from '../src/types/backtest';
 
@@ -52,6 +53,16 @@ const negativeVolumeBars = bars.map((bar) => ({ ...bar }));
 negativeVolumeBars[7].volume = -1;
 const negativeVolumeValidation = validateMarketDataSeries(negativeVolumeBars);
 assert(!negativeVolumeValidation.isValid && negativeVolumeValidation.errors.some(e => e.includes('Negative volume')), 'negative market volume is rejected');
+
+const aiTestInput = {
+  symbol: 'NIFTY50', timestamp: Date.now(), currentPrice: 1000,
+  indicators: { ema20: 1010, ema50: 1000, ema200: 990, rsi14: 55, atr14: 10, relativeVolume: 1.1, marketRegime: 'TRENDING' },
+  currentMarketConditions: { spreadBps: 5, dataStalenessMs: 0 },
+};
+const staleAiDecision = generateAIDecision({ ...aiTestInput, currentMarketConditions: { spreadBps: 5, dataStalenessMs: 3001 } });
+assert(staleAiDecision.signal === 'NO_TRADE' && staleAiDecision.confidence === 0, 'AI decision fails closed when market data is stale');
+const invalidTelemetryAiDecision = generateAIDecision({ ...aiTestInput, currentMarketConditions: { spreadBps: -1, dataStalenessMs: 0 } });
+assert(invalidTelemetryAiDecision.signal === 'NO_TRADE' && invalidTelemetryAiDecision.confidence === 0, 'AI decision fails closed on invalid market telemetry');
 
 const snapshot = generateMarketSnapshot('NIFTY50', bars[bars.length - 1].close);
 const riskSafeSnapshot = { ...snapshot, timestamp: Date.now(), dataQuality: { ...snapshot.dataQuality, isStale: false, latencyMs: 45, isValidated: true } };
@@ -111,6 +122,15 @@ const maxNotionalVerdict = evaluateRiskGates(maxNotionalOrder, INITIAL_PORTFOLIO
 assert(!maxNotionalVerdict.isApproved && maxNotionalVerdict.checks.some(c => c.checkName === 'MAX_POSITION_NOTIONAL' && !c.passed), 'max position notional gate rejects a $40,000 order against the $25,000 default ceiling');
 const maxNotionalPaperResult = executePaperOrder(maxNotionalOrder, INITIAL_PORTFOLIO_STATE, snapshot);
 assert(maxNotionalPaperResult.status === 'REJECTED' && maxNotionalPaperResult.rejectionReason?.includes('deterministic risk engine'), 'paper execution boundary independently enforces the deterministic risk gate');
+
+const marketSlippageBoundaryOrder: OrderRequest = {
+  ...baseOrder, id: 'SMOKE-SLIPPAGE-BOUNDARY', orderId: 'SMOKE-SLIPPAGE-BOUNDARY', clientOrderId: 'SMOKE-SLIPPAGE-BOUNDARY-CLI',
+  quantity: 24.99, estimatedPrice: snapshot.lastPrice, estimatedSlippageBps: 5,
+};
+const marketSlippageBoundaryVerdict = evaluateRiskGates(marketSlippageBoundaryOrder, INITIAL_PORTFOLIO_STATE, riskSafeSnapshot);
+assert(!marketSlippageBoundaryVerdict.isApproved && marketSlippageBoundaryVerdict.checks.some(c => c.checkName === 'MAX_POSITION_NOTIONAL' && !c.passed), 'market-order risk sizing includes modeled slippage before approving a position ceiling');
+const marketSlippageBoundaryPaper = executePaperOrder(marketSlippageBoundaryOrder, INITIAL_PORTFOLIO_STATE, riskSafeSnapshot);
+assert(marketSlippageBoundaryPaper.status === 'REJECTED' && marketSlippageBoundaryPaper.rejectionReason?.includes('deterministic risk engine'), 'paper execution cannot bypass the slippage-aware position ceiling');
 
 const concentrationSnapshot = { ...riskSafeSnapshot, lastPrice: 1000, bid: 999, ask: 1001 };
 const concentratedPortfolio = {

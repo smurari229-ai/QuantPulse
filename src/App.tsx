@@ -79,7 +79,7 @@ export default function App() {
       const date = new Date(order.timestamp);
       return `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}` === todayKey;
     }).length;
-    return { lastOrderTimestamps, recentOrders, todayExecutedTradesCount, brokerHeartbeatActive: true, isEmergencyKillSwitchActive: killActive };
+    return { lastOrderTimestamps, recentOrders, todayExecutedTradesCount, brokerHeartbeatActive: executionMode === 'PAPER', isEmergencyKillSwitchActive: killActive };
   }, [orders, killActive]);
 
   const [currentVerdict, setCurrentVerdict] = useState<RiskValidationVerdict>(() => {
@@ -121,7 +121,7 @@ export default function App() {
         {activeView === 'ai' && <AiDecisionView decision={aiDecision} indicators={indicators} currentPrice={marketSnapshot.lastPrice} symbol={selectedSymbol} marketSnapshot={marketSnapshot} onRefreshDecision={setAiDecision} />}
         {activeView === 'strategy' && <StrategyStatusView symbol={selectedSymbol} bars={bars} />}
         {activeView === 'backtest' && <BacktestingLabView bars={bars} symbol={selectedSymbol} />}
-        {activeView === 'paper' && <PaperTradingView riskConfig={riskConfig} portfolio={portfolio} marketSnapshot={marketSnapshot} isEmergencyKillSwitchActive={killActive} riskContext={riskContext} onOrderExecuted={handleOrderExecuted} onRiskVerdictGenerated={setCurrentVerdict} />}
+        {activeView === 'paper' && <PaperTradingView executionMode={executionMode} riskConfig={riskConfig} portfolio={portfolio} marketSnapshot={marketSnapshot} isEmergencyKillSwitchActive={killActive} riskContext={riskContext} onOrderExecuted={handleOrderExecuted} onRiskVerdictGenerated={setCurrentVerdict} />}
         {activeView === 'orders' && <OrdersHistoryView orders={orders} />}
         {activeView === 'risk' && <RiskMonitorView riskConfig={riskConfig} currentVerdict={currentVerdict} portfolio={portfolio} marketSnapshot={marketSnapshot} riskContext={riskContext} onNewVerdict={setCurrentVerdict} />}
         {activeView === 'audit' && <AuditLogsView />}
