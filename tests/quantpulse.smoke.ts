@@ -518,6 +518,9 @@ assert(partial1.success && partial1.order?.lifecycle.state === 'PARTIALLY_FILLED
 assert(partialLedger.getReservedCash() === 7000, 'first partial fill releases only the filled BUY reservation');
 const partial2 = partialLedger.recordFill(partialOrder.id, makePartialFill('FILL-P-20', 20, 101), partial1.portfolio!, partialSnapshot, 'EVENT-P-20');
 assert(partial2.success && partial2.order?.lifecycle.state === 'PARTIALLY_FILLED' && partial2.order.filledQuantity === 50 && partial2.order.remainingQuantity === 50, 'second 20-unit partial fill accumulates without closing the order');
+const brokerIdChange = partialLedger.recordFill(partialOrder.id, { ...makePartialFill('FILL-P-BROKER-CHANGE', 1, 101), brokerOrderId: 'BROKER-CHANGED' }, partial2.portfolio!, partialSnapshot, 'EVENT-P-BROKER-CHANGE');
+assert(!brokerIdChange.success && brokerIdChange.reason?.includes('changed'), 'an existing order cannot silently change brokerOrderId between fills');
+
 const partial3 = partialLedger.recordFill(partialOrder.id, makePartialFill('FILL-P-50', 50, 102), partial2.portfolio!, partialSnapshot, 'EVENT-P-50');
 assert(partial3.success && partial3.order?.lifecycle.state === 'FILLED' && partial3.order.remainingQuantity === 0, 'final 50-unit fill closes the 100-unit order');
 assert(partialLedger.getReservedCash() === 0, 'fully filled order releases all remaining BUY reservation');
