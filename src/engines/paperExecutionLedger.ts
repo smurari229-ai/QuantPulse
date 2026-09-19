@@ -130,6 +130,9 @@ export class PaperExecutionLedger {
     if (fill.brokerOrderId && this.brokerOrderIds.has(fill.brokerOrderId) && this.brokerOrderIds.get(fill.brokerOrderId) !== orderId) {
       return { success: false, reason: 'Broker order ID is already bound to a different order.' };
     }
+    if (execution.brokerOrderId && fill.brokerOrderId !== execution.brokerOrderId) {
+      return { success: false, reason: 'Broker order ID changed for an existing order.' };
+    }
     if (!Number.isFinite(fill.quantity) || fill.quantity <= 0 || fill.quantity > execution.remainingQuantity) {
       return { success: false, reason: 'Fill quantity exceeds the remaining order quantity or is invalid.' };
     }
