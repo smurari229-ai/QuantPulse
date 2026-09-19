@@ -24,17 +24,14 @@ const invalidIndicatorResult = evaluateStrategySignal(REGISTERED_STRATEGIES[0], 
 assert(invalidIndicatorResult.signal === 'NO_TRADE' && invalidIndicatorResult.targetQuantity === 0, 'invalid indicator inputs fail closed without producing an actionable signal');
 assert(validateMarketDataSeries(bars).isValid, 'generated market data passes validation');
 const trendStrategy = REGISTERED_STRATEGIES.find((strategy) => strategy.id === 'TF_EMA_CROSS')!;
-let bullishFixture = generateSyntheticDailyBars('NIFTY50', 260);
-const bullishBase = bullishFixture[bullishFixture.length - 2];
-bullishFixture[bullishFixture.length - 1] = {
-  ...bullishBase,
-  timestamp: bullishBase.timestamp + 86_400_000,
-  open: bullishBase.close * 1.18,
-  high: bullishBase.close * 1.22,
-  low: bullishBase.close * 1.17,
-  close: bullishBase.close * 1.20,
-  volume: bullishBase.volume * 3,
-};
+const bullishFixture = Array.from({ length: 103 }, (_, i) => {
+  const closes = i < 100 ? 100 : i === 100 ? 94 : i === 101 ? 99.5 : 105;
+  const previousClose = i === 0 ? closes : (i - 1 < 100 ? 100 : i - 1 === 100 ? 94 : 99.5);
+  const open = previousClose;
+  const high = Math.max(open, closes) * 1.001;
+  const low = Math.min(open, closes) * 0.999;
+  return { timestamp: Date.now() - (103 - i) * 86_400_000, open, high, low, close: closes, volume: i === 102 ? 3_000_000 : 1_000_000 };
+});
 const trendSignal = evaluateStrategySignal(trendStrategy, 'NIFTY50', bullishFixture);
 assert(trendSignal.signal === 'BUY', 'trend strategy generates the required BUY signal on a deterministic bullish crossover fixture');
 assert(trendSignal.suggestedStopLoss > 0 && trendSignal.suggestedTakeProfit > trendSignal.suggestedEntry && trendSignal.riskRewardRatio >= 1.5, 'trend BUY contains valid protective stop, target, and risk/reward');
