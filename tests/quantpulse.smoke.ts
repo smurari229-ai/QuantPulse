@@ -5,6 +5,7 @@ import { INITIAL_PORTFOLIO_STATE, executePaperOrder } from '../src/engines/paper
 import { triggerEmergencyKillSwitch, resetKillSwitchWithVerification } from '../src/engines/killSwitchEngine';
 import { runFullBacktest } from '../src/engines/backtestingLab';
 import { evaluateStrategySignal, REGISTERED_STRATEGIES } from '../src/engines/strategyEngine';
+import { calculateEMA, calculateRSI } from '../src/engines/marketAnalysisEngine';
 import { AuditLogChain } from '../src/engines/auditEngine';
 import type { OrderRequest } from '../src/types/order';
 import type { BacktestParameters } from '../src/types/backtest';
@@ -183,6 +184,39 @@ const badReset = resetKillSwitchWithVerification(killState, 'WRONG');
 assert(!badReset.success && badReset.updatedState.isEmergencyStopTripped, 'wrong reset code keeps kill switch engaged');
 const goodReset = resetKillSwitchWithVerification(killState, killState.resetConfirmationCode);
 assert(goodReset.success && !goodReset.updatedState.isEmergencyStopTripped, 'correct reset code re-arms sandbox');
+
+const emaFixture = [10, 11, 12, 13, 14];
+const ema = calculateEMA(emaFixture, 3);
+assert(ema.length === emaFixture.length && Math.abs(ema[1] - 10.5) < 1e-10 && Math.abs(ema[4] - 13.0625) < 1e-10, 'EMA matches the recursive mathematical formula on a known fixture');
+const rsi = calculateRSI([100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116, 117, 118, 119], 14);
+assert(rsi.every((value) => Number.isFinite(value) && value >= 0 && value <= 100), 'RSI remains finite and bounded to [0, 100]');
+
+const missingStopVerdict = evaluateRiskGates(
+  { ...baseOrder, id: 'SMOKE-STOPLOSS-01', orderId: 'SMOKE-STOPLOSS-01', stopLossPrice: 0 },
+  INITIAL_PORTFOLIO_STATE,
+  riskSafeSnapshot
+);
+assert(!missingStopVerdict.isApproved && missingStopVerdict.checks.some(c => c.checkName === 'MANDATORY_STOP_LOSS' && !c.passed), 'mandatory stop-loss gate rejects an order without a valid stop');
+
+const lossLockedPortfolio = { ...INITIAL_PORTFOLIO_STATE, dayStartEquity: 100000, dayStartTimestamp: Date.now() - 60_000, equity: 96800 };
+const dailyLossVerdict = evaluateRiskGates(baseOrder, lossLockedPortfolio, riskSafeSnapshot);
+assert(!dailyLossVerdict.isApproved && dailyLossVerdict.checks.some(c => c.checkName === 'MAX_DAILY_LOSS' && !c.passed), 'daily-loss circuit breaker rejects new orders after the configured loss limit');
+
+const duplicateVerdict = evaluateRiskGates(
+  baseOrder,
+  INITIAL_PORTFOLIO_STATE,
+  riskSafeSnapshot,
+  { recentOrders: [{ id: 'DUP-1', symbol: baseOrder.symbol, side: baseOrder.side, quantity: baseOrder.quantity, timestamp: Date.now() - 10_000 }] }
+);
+assert(!duplicateVerdict.isApproved && duplicateVerdict.checks.some(c => c.checkName === 'DUPLICATE_ORDER_DETECTION' && !c.passed), 'duplicate-order gate suppresses an identical order inside the configured window');
+
+const heartbeatVerdict = evaluateRiskGates(baseOrder, INITIAL_PORTFOLIO_STATE, riskSafeSnapshot, { brokerHeartbeatActive: false });
+assert(!heartbeatVerdict.isApproved && heartbeatVerdict.checks.some(c => c.checkName === 'BROKER_CONNECTIVITY_HEARTBEAT' && !c.passed), 'broker heartbeat failure blocks order routing');
+
+const invertedBars = bars.map((bar) => ({ ...bar }));
+invertedBars[12].high = invertedBars[12].low - 1;
+const invertedValidation = validateMarketDataSeries(invertedBars);
+assert(!invertedValidation.isValid && invertedValidation.anomaliesDetected.highLowInversion, 'market-data validator rejects High/Low inversion');
 
 const auditLedger = new AuditLogChain();
 const auditRecord = auditLedger.appendRecord(
