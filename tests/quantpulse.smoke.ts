@@ -378,12 +378,8 @@ let unsupportedPublicBacktestRejected = false;
 try { runFullBacktest(bars, { ...params, symbol: 'UNSUPPORTED' as any }); } catch { unsupportedPublicBacktestRejected = true; }
 assert(unsupportedPublicBacktestRejected, 'public backtest entry rejects unsupported symbols');
 
-console.log('QUANTPULSE SMOKE TESTS: PASS');
-console.log(JSON.stringify({ bars: bars.length, trades: backtest.trades.length, oosTrades: backtest.outOfSampleMetrics.totalTrades, walkForwardFolds: backtest.walkForwardResults.length }, null, 2));
-
-
 const liveHealth = await BLOCKED_LIVE_BROKER_ADAPTER.getHealth();
-assert(liveHealth.liveTradingAuthorized === false, 'Live broker adapter must remain unauthorized by default');
+assert(liveHealth.connected === false && liveHealth.authenticated === false && liveHealth.liveTradingAuthorized === false, 'Live broker adapter health must remain disconnected and unauthorized by default');
 let liveSubmitBlocked = false;
 try {
   await BLOCKED_LIVE_BROKER_ADAPTER.submitOrder({} as any);
@@ -391,3 +387,20 @@ try {
   liveSubmitBlocked = String(error).includes('LIVE_ORDER_BLOCKED');
 }
 assert(liveSubmitBlocked, 'Live broker adapter must fail closed without authorization');
+let liveCancelBlocked = false;
+try {
+  await BLOCKED_LIVE_BROKER_ADAPTER.cancelOrder('SMOKE-LIVE-CANCEL');
+} catch (error) {
+  liveCancelBlocked = String(error).includes('LIVE_CANCEL_BLOCKED');
+}
+assert(liveCancelBlocked, 'Live broker cancellation must fail closed without authorization');
+let liveReconciliationBlocked = false;
+try {
+  await BLOCKED_LIVE_BROKER_ADAPTER.reconcilePortfolio();
+} catch (error) {
+  liveReconciliationBlocked = String(error).includes('LIVE_RECONCILIATION_BLOCKED');
+}
+assert(liveReconciliationBlocked, 'Live broker reconciliation must fail closed without authorization');
+
+console.log('QUANTPULSE SMOKE TESTS: PASS');
+console.log(JSON.stringify({ bars: bars.length, trades: backtest.trades.length, oosTrades: backtest.outOfSampleMetrics.totalTrades, walkForwardFolds: backtest.walkForwardResults.length }, null, 2));
