@@ -36,10 +36,8 @@ bullishFixture[bullishFixture.length - 1] = {
   volume: bullishBase.volume * 3,
 };
 const trendSignal = evaluateStrategySignal(trendStrategy, 'NIFTY50', bullishFixture);
-assert(['BUY', 'HOLD', 'NO_TRADE'].includes(trendSignal.signal), 'trend strategy returns a documented signal enum');
-if (trendSignal.signal === 'BUY') {
-  assert(trendSignal.suggestedStopLoss > 0 && trendSignal.suggestedTakeProfit > trendSignal.suggestedEntry && trendSignal.riskRewardRatio >= 1.5, 'trend BUY contains valid protective stop, target, and risk/reward');
-}
+assert(trendSignal.signal === 'BUY', 'trend strategy generates the required BUY signal on a deterministic bullish crossover fixture');
+assert(trendSignal.suggestedStopLoss > 0 && trendSignal.suggestedTakeProfit > trendSignal.suggestedEntry && trendSignal.riskRewardRatio >= 1.5, 'trend BUY contains valid protective stop, target, and risk/reward');
 
 const meanReversionStrategy = REGISTERED_STRATEGIES.find((strategy) => strategy.id === 'MR_RSI_BOLLINGER')!;
 const neutralSignal = evaluateStrategySignal(meanReversionStrategy, 'RELIANCE', bars);
@@ -57,6 +55,16 @@ const btProbeParams: BacktestParameters = {
 const btProbe = runFullBacktest(btTradeInvariantBars, btProbeParams);
 assert(btProbe.trades.every((trade) => trade.entryTimestamp > trade.exitTimestamp || trade.entryTimestamp <= trade.exitTimestamp), 'backtest timestamps are finite and chronologically comparable');
 assert(btProbe.trades.every((trade) => trade.entryTimestamp <= trade.exitTimestamp), 'backtest never records an entry after its exit');
+const btCloses = btTradeInvariantBars.map((bar) => bar.close);
+const btEma20 = calculateEMA(btCloses, 20);
+const btEma50 = calculateEMA(btCloses, 50);
+const btRsi = calculateRSI(btCloses, 14);
+const lookAheadSafeEntryTimestamps = new Set<number>();
+for (let i = 24; i < btTradeInvariantBars.length - 1; i++) {
+  const signalActive = btEma20[i] > btEma50[i] && btEma20[i - 1] <= btEma50[i - 1] && btRsi[i] < 65;
+  if (signalActive) lookAheadSafeEntryTimestamps.add(btTradeInvariantBars[i + 1].timestamp);
+}
+assert(btProbe.trades.every((trade) => lookAheadSafeEntryTimestamps.has(trade.entryTimestamp)), 'backtest entries occur only on the bar immediately after a signal bar, with no future-bar entry timing');
 assert(btProbe.combinedMetrics.sampleSizeWarning.recommendedMinTrades === 30, 'small-sample threshold is explicitly 30 trades');
 if (btProbe.combinedMetrics.totalTrades < 30) {
   assert(btProbe.combinedMetrics.sampleSizeWarning.isUnderSampled, 'backtest emits an undersampled warning when trades are below 30');
