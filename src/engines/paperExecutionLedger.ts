@@ -70,6 +70,7 @@ export class PaperExecutionLedger {
   private readonly brokerOrderIds = new Map<string, string>();
   private readonly fillIds = new Set<string>();
   private readonly processedEventIds = new Set<string>();
+  private reservedCash = 0;
 
   public submitOrder(order: OrderRequest, eventId: string, timestamp = Date.now()): PaperExecutionEventResult {
     if (!eventId.trim()) return { success: false, reason: 'Event ID is required.' };
@@ -95,6 +96,12 @@ export class PaperExecutionLedger {
     };
     this.orders.set(order.id, execution);
     this.clientOrderIds.set(order.clientOrderId, order.id);
+    if (order.side === 'BUY') {
+      const reservationPrice = order.estimatedPrice ?? order.limitPrice;
+      if (Number.isFinite(reservationPrice) && reservationPrice! > 0) {
+        this.reservedCash += reservationPrice! * order.quantity;
+      }
+    }
     this.processedEventIds.add(eventId);
     return { success: true, order: execution };
   }
@@ -139,6 +146,12 @@ export class PaperExecutionLedger {
     execution.lifecycle = lifecycle;
     execution.filledQuantity += fill.quantity;
     execution.remainingQuantity -= fill.quantity;
+    if (execution.order.side === 'BUY') {
+      const reservationPrice = execution.order.estimatedPrice ?? execution.order.limitPrice;
+      if (Number.isFinite(reservationPrice) && reservationPrice! > 0) {
+        this.reservedCash = Math.max(0, this.reservedCash - reservationPrice! * fill.quantity);
+      }
+    }
     execution.remainingQuantity = Math.max(0, Math.round(execution.remainingQuantity * 1e10) / 1e10);
     execution.fills.push(fill);
     execution.brokerOrderId ||= fill.brokerOrderId;
@@ -165,8 +178,19 @@ export class PaperExecutionLedger {
     if (!cancelled.success) return { success: false, reason: cancelled.reason };
 
     execution.lifecycle = cancelled.lifecycle;
+    if (execution.order.side === 'BUY') {
+      const reservationPrice = execution.order.estimatedPrice ?? execution.order.limitPrice;
+      if (Number.isFinite(reservationPrice) && reservationPrice! > 0) {
+        this.reservedCash = Math.max(0, this.reservedCash - reservationPrice! * execution.remainingQuantity);
+      }
+    }
+    execution.remainingQuantity = 0;
     this.processedEventIds.add(eventId);
     return { success: true, order: execution };
+  }
+
+  public getReservedCash(): number {
+    return Math.round(this.reservedCash * 100) / 100;
   }
 
   public getOrder(orderId: string): PaperExecutionOrder | undefined {
