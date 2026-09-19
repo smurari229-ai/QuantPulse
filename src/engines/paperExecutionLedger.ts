@@ -37,6 +37,8 @@ export interface ReconciliationPositionSnapshot {
 }
 
 export interface PaperReconciliationSnapshot {
+  timestamp?: number;
+  maxAgeMs?: number;
   orders: ReconciliationOrderSnapshot[];
   positions: ReconciliationPositionSnapshot[];
   cash: number;
@@ -206,6 +208,20 @@ export class PaperExecutionLedger {
 
   public reconcile(external: PaperReconciliationSnapshot, portfolio: PortfolioState): ReconciliationResult {
     const mismatches: ReconciliationMismatch[] = [];
+    const now = Date.now();
+    if (external.timestamp !== undefined) {
+      const maxAgeMs = external.maxAgeMs ?? 5000;
+      const ageMs = now - external.timestamp;
+      if (!Number.isFinite(external.timestamp) || !Number.isFinite(maxAgeMs) || maxAgeMs <= 0 || ageMs < 0 || ageMs > maxAgeMs) {
+        mismatches.push({
+          category: 'ORDER',
+          key: 'reconciliation-timestamp',
+          localValue: now,
+          externalValue: external.timestamp,
+          reason: ageMs < 0 ? 'External reconciliation snapshot is future-dated.' : 'External reconciliation snapshot is stale or invalid.',
+        });
+      }
+    }
 
     const externalOrders = new Map(external.orders.map((order) => [order.orderId, order]));
     for (const local of this.orders.values()) {
