@@ -112,6 +112,15 @@ assert(!maxNotionalVerdict.isApproved && maxNotionalVerdict.checks.some(c => c.c
 const maxNotionalPaperResult = executePaperOrder(maxNotionalOrder, INITIAL_PORTFOLIO_STATE, snapshot);
 assert(maxNotionalPaperResult.status === 'REJECTED' && maxNotionalPaperResult.rejectionReason?.includes('deterministic risk engine'), 'paper execution boundary independently enforces the deterministic risk gate');
 
+const marketSlippageBoundaryOrder: OrderRequest = {
+  ...baseOrder, id: 'SMOKE-SLIPPAGE-BOUNDARY', orderId: 'SMOKE-SLIPPAGE-BOUNDARY', clientOrderId: 'SMOKE-SLIPPAGE-BOUNDARY-CLI',
+  quantity: 24.99, estimatedPrice: snapshot.lastPrice, estimatedSlippageBps: 5,
+};
+const marketSlippageBoundaryVerdict = evaluateRiskGates(marketSlippageBoundaryOrder, INITIAL_PORTFOLIO_STATE, riskSafeSnapshot);
+assert(!marketSlippageBoundaryVerdict.isApproved && marketSlippageBoundaryVerdict.checks.some(c => c.checkName === 'MAX_POSITION_NOTIONAL' && !c.passed), 'market-order risk sizing includes modeled slippage before approving a position ceiling');
+const marketSlippageBoundaryPaper = executePaperOrder(marketSlippageBoundaryOrder, INITIAL_PORTFOLIO_STATE, riskSafeSnapshot);
+assert(marketSlippageBoundaryPaper.status === 'REJECTED' && marketSlippageBoundaryPaper.rejectionReason?.includes('deterministic risk engine'), 'paper execution cannot bypass the slippage-aware position ceiling');
+
 const concentrationSnapshot = { ...riskSafeSnapshot, lastPrice: 1000, bid: 999, ask: 1001 };
 const concentratedPortfolio = {
   ...INITIAL_PORTFOLIO_STATE,
