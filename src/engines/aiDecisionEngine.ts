@@ -21,15 +21,25 @@ export function generateAIDecision(features: AIFeatureInput): AIDecisionOutput {
   ];
   const hasInvalidInput = numericInputs.some((value) => !Number.isFinite(value));
 
-  if (hasInvalidInput || currentPrice <= 0 || indicators.atr14 < 0 || indicators.relativeVolume < 0) {
+  const hasUnsafeMarketCondition = currentMarketConditions.dataStalenessMs < 0
+    || currentMarketConditions.spreadBps < 0
+    || currentMarketConditions.dataStalenessMs > 3000;
+
+  if (hasInvalidInput || hasUnsafeMarketCondition || currentPrice <= 0 || indicators.atr14 < 0 || indicators.relativeVolume < 0) {
     return {
       signal: 'NO_TRADE',
       confidence: 0,
       confidenceCalibrationNote: AI_CONFIDENCE_DISCLOSURE,
       reasoning: 'Invalid or non-finite market/indicator input detected. No trading decision is permitted until inputs are validated.',
       strategy: 'INPUT_VALIDATION_HALT',
-      risk_flags: ['INVALID_AI_INPUT_DATA'],
-      required_checks: ['Revalidate market snapshot and indicators before any order is considered'],
+      risk_flags: [
+        ...(hasInvalidInput ? ['INVALID_AI_INPUT_DATA'] : []),
+        ...(hasUnsafeMarketCondition ? ['UNSAFE_MARKET_CONDITION'] : []),
+      ],
+      required_checks: [
+        'Revalidate market snapshot and indicators before any order is considered',
+        ...(hasUnsafeMarketCondition ? ['Refresh stale/invalid market-condition telemetry before any order is considered'] : []),
+      ],
       generatedAt: Date.now(),
       modelIdentifier: 'HEURISTIC-QUANT-DECISION-V2.5',
       featuresUsed: {
