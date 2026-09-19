@@ -13,7 +13,7 @@ function isFiniteNumber(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value);
 }
 
-function validateInput(input: Record<string, any>) {
+export function validateInput(input: Record<string, any>) {
   if (typeof input.symbol !== 'string' || input.symbol.trim().length === 0 || input.symbol.length > 50) throw new Error('AI symbol input is invalid.');
   if (!isFiniteNumber(input.currentPrice) || input.currentPrice <= 0) throw new Error('AI current price is invalid.');
   if (!input.indicators || typeof input.indicators !== 'object') throw new Error('AI indicators are missing.');
@@ -32,7 +32,7 @@ function validateInput(input: Record<string, any>) {
   }
 }
 
-function validateDecision(value: unknown) {
+export function validateDecision(value: unknown) {
   if (!value || typeof value !== 'object') throw new Error('AI response must be an object.');
   const d = value as Record<string, unknown>;
   if (!SIGNALS.has(String(d.signal))) throw new Error('AI response contains an invalid signal.');
