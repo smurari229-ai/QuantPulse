@@ -105,18 +105,20 @@ export function executePaperOrder(order: OrderRequest, currentPortfolio: Portfol
       const p = positions[positionIndex];
       const totalQty = p.quantity + order.quantity;
       p.averageEntryPrice = Math.round(((p.averageEntryPrice * p.quantity + fillPrice * order.quantity) / totalQty) * 100) / 100;
+      p.entryCharges = Math.round((p.entryCharges + totalCharges) * 100) / 100;
       p.quantity = totalQty; p.currentPrice = marketSnapshot.lastPrice;
       p.stopLossPrice = order.stopLossPrice; p.takeProfitPrice = order.takeProfitPrice;
     } else {
       positions.push({ symbol: order.symbol, quantity: order.quantity, averageEntryPrice: fillPrice, currentPrice: marketSnapshot.lastPrice,
-        marketValue: 0, unrealizedPnL: 0, unrealizedPnLPct: 0, realizedPnL: 0, stopLossPrice: order.stopLossPrice,
+        marketValue: 0, unrealizedPnL: 0, unrealizedPnLPct: 0, realizedPnL: 0, entryCharges: totalCharges, stopLossPrice: order.stopLossPrice,
         takeProfitPrice: order.takeProfitPrice, notionalExposurePct: 0, highestPriceSinceEntry: fillPrice, openedAt: now });
     }
   } else if (existing) {
     cashDelta = value - totalCharges;
-    realizedDelta = (fillPrice - existing.averageEntryPrice) * order.quantity - totalCharges;
+    const allocatedEntryCharges = Math.round((existing.entryCharges * (order.quantity / existing.quantity)) * 100) / 100;
+    realizedDelta = (fillPrice - existing.averageEntryPrice) * order.quantity - allocatedEntryCharges - totalCharges;
     if (order.quantity === existing.quantity) positions.splice(positionIndex, 1);
-    else { positions[positionIndex].quantity -= order.quantity; positions[positionIndex].realizedPnL += realizedDelta; }
+    else { positions[positionIndex].quantity -= order.quantity; positions[positionIndex].entryCharges = Math.max(0, Math.round((existing.entryCharges - allocatedEntryCharges) * 100) / 100); positions[positionIndex].realizedPnL += realizedDelta; }
   }
 
   const cash = currentPortfolio.cash + cashDelta;
@@ -125,7 +127,7 @@ export function executePaperOrder(order: OrderRequest, currentPortfolio: Portfol
   for (const p of positions) {
     const currentValue = p.quantity * marketSnapshot.lastPrice;
     const basis = p.averageEntryPrice * p.quantity;
-    const pnl = currentValue - basis;
+    const pnl = currentValue - basis - p.entryCharges;
     p.currentPrice = marketSnapshot.lastPrice; p.marketValue = Math.round(currentValue * 100) / 100;
     p.unrealizedPnL = Math.round(pnl * 100) / 100; p.unrealizedPnLPct = basis > 0 ? Math.round((pnl / basis) * 10000) / 100 : 0;
     marketValue += currentValue; unrealized += pnl;
