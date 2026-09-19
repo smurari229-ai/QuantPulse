@@ -2,6 +2,8 @@ import { PaperExecutionLedger } from '../src/engines/paperExecutionLedger';
 import { generateAIDecision } from '../src/engines/aiDecisionEngine';
 import { generateMarketSnapshot } from '../src/engines/marketDataEngine';
 import { INITIAL_PORTFOLIO_STATE } from '../src/engines/paperTradingEngine';
+import { DEFAULT_RISK_CONFIG, evaluateRiskGates } from '../src/engines/riskEngine';
+import { triggerEmergencyKillSwitch } from '../src/engines/killSwitchEngine';
 import type { OrderFill, OrderRequest, PortfolioState } from '../src/types/order';
 
 function assert(condition: unknown, message: string): asserts condition {
@@ -78,5 +80,32 @@ const invalidRsi = generateAIDecision({ ...aiBase, indicators: { ...aiBase.indic
 assert(invalidRsi.signal === 'NO_TRADE' && invalidRsi.confidence === 0, 'AI rejects out-of-range RSI');
 const negativeSpread = generateAIDecision({ ...aiBase, currentMarketConditions: { ...aiBase.currentMarketConditions, spreadBps: -1 } });
 assert(negativeSpread.signal === 'NO_TRADE' && negativeSpread.confidence === 0, 'AI rejects negative spread');
+
+
+const failureOrder: OrderRequest = { ...order, id: 'FAILURE-MATRIX', orderId: 'FAILURE-MATRIX', clientOrderId: 'FAILURE-MATRIX-CLIENT', quantity: 1, stopLossPrice: 95, takeProfitPrice: 110 };
+const staleSnapshot = { ...snapshot, timestamp: Date.now() - 10_000, dataQuality: { ...snapshot.dataQuality, isStale: true, latencyMs: 10_000 } };
+const staleVerdict = evaluateRiskGates(failureOrder, portfolio, staleSnapshot, undefined, DEFAULT_RISK_CONFIG);
+assert(!staleVerdict.isApproved && staleVerdict.rejectionReasons.some((reason) => reason.toLowerCase().includes('stale')), 'failure matrix blocks stale market data');
+
+const oversizedVerdict = evaluateRiskGates({ ...failureOrder, quantity: 500 }, portfolio, snapshot, undefined, DEFAULT_RISK_CONFIG);
+assert(!oversizedVerdict.isApproved && oversizedVerdict.checks.some((check) => check.checkName === 'MAX_POSITION_NOTIONAL' && !check.passed), 'failure matrix blocks oversized orders');
+
+const missingStopVerdict = evaluateRiskGates({ ...failureOrder, stopLossPrice: 0 }, portfolio, snapshot, undefined, DEFAULT_RISK_CONFIG);
+assert(!missingStopVerdict.isApproved && missingStopVerdict.checks.some((check) => check.checkName === 'MANDATORY_STOP_LOSS' && !check.passed), 'failure matrix blocks missing stop-loss');
+
+const dailyLossPortfolio = { ...portfolio, equity: portfolio.dayStartEquity * 0.965 };
+const dailyLossVerdict = evaluateRiskGates(failureOrder, dailyLossPortfolio, snapshot, undefined, DEFAULT_RISK_CONFIG);
+assert(!dailyLossVerdict.isApproved && dailyLossVerdict.checks.some((check) => check.checkName === 'MAX_DAILY_LOSS' && !check.passed), 'failure matrix blocks daily-loss breach');
+
+const heartbeatVerdict = evaluateRiskGates(failureOrder, portfolio, snapshot, { brokerHeartbeatActive: false }, DEFAULT_RISK_CONFIG);
+assert(!heartbeatVerdict.isApproved && heartbeatVerdict.checks.some((check) => check.checkName === 'BROKER_CONNECTIVITY_HEARTBEAT' && !check.passed), 'failure matrix blocks broker heartbeat failure');
+
+const killState = triggerEmergencyKillSwitch('failure-matrix');
+const killVerdict = evaluateRiskGates(failureOrder, portfolio, snapshot, { isEmergencyKillSwitchActive: killState.isEmergencyStopTripped }, DEFAULT_RISK_CONFIG);
+assert(!killVerdict.isApproved && killVerdict.checks.some((check) => check.checkName === 'MARKET_ABNORMALITY_CIRCUIT_BREAKER' && !check.passed), 'failure matrix blocks active emergency kill switch');
+
+const malformedPortfolio = { ...portfolio, cash: Number.NaN };
+const malformedVerdict = evaluateRiskGates(failureOrder, malformedPortfolio, snapshot, undefined, DEFAULT_RISK_CONFIG);
+assert(!malformedVerdict.isApproved && malformedVerdict.checks.some((check) => check.checkName === 'ORDER_MARKET_SANITY' && !check.passed), 'failure matrix blocks malformed portfolio state');
 
 console.log('QUANTPULSE PAPER EXECUTION TESTS: PASS');
