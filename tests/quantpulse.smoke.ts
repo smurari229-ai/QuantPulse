@@ -164,7 +164,7 @@ const baseOrder: OrderRequest = {
 
 const futureSnapshot = { ...riskSafeSnapshot, timestamp: Date.now() + 60_000, dataQuality: { ...riskSafeSnapshot.dataQuality, isStale: false } };
 const futureSnapshotVerdict = evaluateRiskGates(baseOrder, INITIAL_PORTFOLIO_STATE, futureSnapshot);
-assert(!futureSnapshotVerdict.isApproved && futureSnapshotVerdict.rejectionReasons.some(reason => reason.includes('stale')), 'future-dated market snapshot is rejected fail-closed');
+assert(!futureSnapshotVerdict.isApproved && futureSnapshotVerdict.rejectionReasons.some(reason => reason.toLowerCase().includes('stale')), 'future-dated market snapshot is rejected fail-closed');
 const staleSnapshot = {
   ...snapshot,
   timestamp: Date.now() - 5000,
