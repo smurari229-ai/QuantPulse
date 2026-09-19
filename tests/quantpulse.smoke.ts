@@ -578,6 +578,24 @@ const mismatched = partialLedger.reconcile({
   cash: partial3.portfolio!.cash + 100,
 }, partial3.portfolio!);
 assert(!mismatched.isReconciled && mismatched.mismatches.length >= 3, 'reconciliation detects order, position, and cash mismatches');
+const staleReconciliation = partialLedger.reconcile({
+  timestamp: Date.now() - 10_000,
+  maxAgeMs: 5_000,
+  orders: [{ orderId: partialOrder.id, clientOrderId: partialOrder.clientOrderId, brokerOrderId: 'BROKER-PARTIAL-1', state: 'FILLED', quantity: 100, filledQuantity: 100, averageFillPrice: 101.1 }],
+  positions: [{ symbol: 'RELIANCE', quantity: 100, averageEntryPrice: partial3.portfolio!.positions[0].averageEntryPrice }],
+  cash: partial3.portfolio!.cash,
+}, partial3.portfolio!);
+assert(!staleReconciliation.isReconciled && staleReconciliation.mismatches.some((mismatch) => mismatch.key === 'reconciliation-timestamp'), 'stale reconciliation snapshot is rejected');
+
+const futureReconciliation = partialLedger.reconcile({
+  timestamp: Date.now() + 10_000,
+  maxAgeMs: 5_000,
+  orders: [{ orderId: partialOrder.id, clientOrderId: partialOrder.clientOrderId, brokerOrderId: 'BROKER-PARTIAL-1', state: 'FILLED', quantity: 100, filledQuantity: 100, averageFillPrice: 101.1 }],
+  positions: [{ symbol: 'RELIANCE', quantity: 100, averageEntryPrice: partial3.portfolio!.positions[0].averageEntryPrice }],
+  cash: partial3.portfolio!.cash,
+}, partial3.portfolio!);
+assert(!futureReconciliation.isReconciled && futureReconciliation.mismatches.some((mismatch) => mismatch.reason.includes('future-dated')), 'future-dated reconciliation snapshot is rejected');
+
 
 
 const aiBaseline = {
