@@ -49,8 +49,10 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       indicators?.rsi14, indicators?.atr14, indicators?.relativeVolume,
       conditions?.spreadBps, conditions?.dataStalenessMs,
     ];
-    const invalidNumericInput = requiredNumbers.some((value) => value !== undefined && !isFiniteNumber(value));
-    const unsafeMarketInput = !isFiniteNumber(input.currentPrice) || input.currentPrice <= 0
+    const invalidNumericInput = requiredNumbers.some((value) => !isFiniteNumber(value));
+    const unsafeMarketInput = typeof input.symbol !== 'string' || input.symbol.trim().length === 0
+      || !isFiniteNumber(input.timestamp) || input.timestamp <= 0
+      || !isFiniteNumber(input.currentPrice) || input.currentPrice <= 0
       || !conditions || !isFiniteNumber(conditions.spreadBps) || conditions.spreadBps < 0
       || !isFiniteNumber(conditions.dataStalenessMs) || conditions.dataStalenessMs < 0
       || conditions.dataStalenessMs > 3000
