@@ -8,7 +8,7 @@ import { evaluateStrategySignal, REGISTERED_STRATEGIES } from '../src/engines/st
 import { calculateEMA, calculateRSI } from '../src/engines/marketAnalysisEngine';
 import { generateAIDecision } from '../src/engines/aiDecisionEngine';
 import { AuditLogChain } from '../src/engines/auditEngine';
-import type { OrderRequest } from '../src/types/order';
+import type { OrderFill, OrderRequest } from '../src/types/order';
 import type { BacktestParameters } from '../src/types/backtest';
 import { createOrderLifecycle, transitionOrder } from '../src/engines/orderStateMachine';
 import { PaperExecutionLedger } from '../src/engines/paperExecutionLedger';
