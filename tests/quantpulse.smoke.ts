@@ -558,12 +558,13 @@ assert(stagedCancelLedger.getOrder(stagedCancelOrder.id)?.filledQuantity === 70,
 const stagedCancelled = stagedCancelLedger.cancelOrder(stagedCancelOrder.id, 'EVENT-STAGED-CANCEL');
 assert(stagedCancelled.success && stagedCancelled.order?.lifecycle.state === 'CANCELLED' && stagedCancelled.order.remainingQuantity === 0, '30+20+20 order cancels its remaining 30 units safely');
 
-const brokerIdConflict = partialLedger.submitOrder(secondOrder, 'SUBMIT-BROKER-2');
-assert(brokerIdConflict.success, 'second distinct order can be submitted before broker-ID collision is tested');
 const brokerIdFill = partialLedger.recordFill(secondOrder.id, { ...makePartialFill('FILL-BROKER-CONFLICT', 1, 100), orderId: secondOrder.id, brokerOrderId: 'BROKER-PARTIAL-1' }, partial3.portfolio!, partialSnapshot, 'EVENT-BROKER-CONFLICT');
 assert(!brokerIdFill.success && brokerIdFill.reason?.includes('Broker order ID'), 'brokerOrderId cannot be rebound to a different order');
 
 const secondOrder: OrderRequest = { ...partialOrder, id: 'SMOKE-BROKER-ID-2', orderId: 'SMOKE-BROKER-ID-2', clientOrderId: 'SMOKE-BROKER-ID-2-CLI' };
+const brokerIdConflict = partialLedger.submitOrder(secondOrder, 'SUBMIT-BROKER-2');
+assert(brokerIdConflict.success, 'second distinct order can be submitted before broker-ID collision is tested');
+
 const reconciled = partialLedger.reconcile({
   orders: [{
     orderId: partialOrder.id,
