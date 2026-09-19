@@ -20,6 +20,8 @@ jobs:
         run: npm install
       - name: TypeScript check
         run: npm run lint
+      - name: Runtime dependency audit
+        run: npm audit --omit=dev --audit-level=high
       - name: Engine smoke tests
         run: npm test
       - name: Production build
