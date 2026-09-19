@@ -294,7 +294,8 @@ export function getTestMatrixSummary(cases: TestCaseItem[] = INITIAL_TEST_CASES)
   const failed = cases.filter((c) => c.status === 'FAIL').length;
   const blocked = cases.filter((c) => c.status === 'BLOCKED').length;
   const notRun = cases.filter((c) => c.status === 'NOT_RUN').length;
-  const passPercentage = total > 0 ? Math.round((passed / total) * 1000) / 10 : 0;
+  const executableCount = passed + failed + notRun;
+  const passPercentage = executableCount > 0 ? Math.round((passed / executableCount) * 1000) / 10 : 0;
 
   return {
     total,
