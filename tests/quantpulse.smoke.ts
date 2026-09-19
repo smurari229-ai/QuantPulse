@@ -571,6 +571,12 @@ const reconciled = partialLedger.reconcile({
     quantity: 100,
     filledQuantity: 100,
     averageFillPrice: (30 * 100 + 20 * 101 + 50 * 102) / 100,
+  }, {
+    orderId: secondOrder.id,
+    clientOrderId: secondOrder.clientOrderId,
+    state: 'ACKNOWLEDGED',
+    quantity: secondOrder.quantity,
+    filledQuantity: 0,
   }],
   positions: [{ symbol: 'RELIANCE', quantity: 100, averageEntryPrice: partial3.portfolio!.positions[0].averageEntryPrice }],
   cash: partial3.portfolio!.cash,
