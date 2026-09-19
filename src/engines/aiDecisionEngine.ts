@@ -53,9 +53,6 @@ export function generateAIDecision(features: AIFeatureInput): AIDecisionOutput {
       featuresUsed: { price: currentPrice, regime: indicators.marketRegime, rsi: indicators.rsi14, trend: 'UNKNOWN', volatilityAtr: indicators.atr14, volumeCondition: 'UNKNOWN' },
     };
   }
-    risk_flags.push('DATA_STALENESS_EXCEEDS_MAX_TOLERANCE');
-    required_checks.push('Verify feed latency with broker gateway');
-  }
 
   if (currentMarketConditions.spreadBps > 15) {
     risk_flags.push('WIDE_BID_ASK_SPREAD_HIGH_SLIPPAGE_RISK');
