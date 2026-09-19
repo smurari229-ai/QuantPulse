@@ -204,7 +204,7 @@ export const INITIAL_TEST_CASES: TestCaseItem[] = [
     preConditions: 'Market data feed disconnected.',
     executionSteps: 'Invoke AI Decision Engine and Risk Engine under disconnected state.',
     expectedBehavior: 'Safe state: NO_TRADE signal emitted, zero orders queued.',
-    status: 'PASS',
+    status: 'NOT_RUN',
     lastExecutedTimestamp: undefined,
     assertionMessage: 'System safely returned NO_TRADE upon network drop.',
   },
