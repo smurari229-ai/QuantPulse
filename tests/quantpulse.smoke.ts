@@ -6,6 +6,7 @@ import { triggerEmergencyKillSwitch, resetKillSwitchWithVerification } from '../
 import { runFullBacktest } from '../src/engines/backtestingLab';
 import { evaluateStrategySignal, REGISTERED_STRATEGIES } from '../src/engines/strategyEngine';
 import { calculateEMA, calculateRSI } from '../src/engines/marketAnalysisEngine';
+import { generateAIDecision } from '../src/engines/aiDecisionEngine';
 import { AuditLogChain } from '../src/engines/auditEngine';
 import type { OrderRequest } from '../src/types/order';
 import type { BacktestParameters } from '../src/types/backtest';
@@ -40,6 +41,18 @@ assert(!evaluateRiskGates({
   executionMode: 'PAPER', timestamp: Date.now(),
 }, INITIAL_PORTFOLIO_STATE, latencySnapshot).checks.find(c => c.checkName === 'STALE_DATA_GUARD')?.passed, '5-second simulated latency trips stale-data risk gate');
 
+const staleHeuristicDecision = generateAIDecision({
+  symbol: 'NIFTY50', timestamp: Date.now(), currentPrice: snapshot.lastPrice,
+  indicators: { ema20: snapshot.lastPrice, ema50: snapshot.lastPrice, ema200: snapshot.lastPrice, rsi14: 55, atr14: snapshot.lastPrice * 0.01, relativeVolume: 1, marketRegime: 'BULLISH' } as any,
+  currentMarketConditions: { spreadBps: 4, dataStalenessMs: 5001 },
+});
+assert(staleHeuristicDecision.signal === 'NO_TRADE' && staleHeuristicDecision.confidence === 0 && staleHeuristicDecision.strategy === 'STALE_DATA_HALT', 'heuristic AI fails closed to NO_TRADE when market data is stale');
+const negativePriceBars = bars.map((bar) => ({ ...bar })); negativePriceBars[11].close = -1;
+const negativePriceValidation = validateMarketDataSeries(negativePriceBars);
+assert(!negativePriceValidation.isValid && negativePriceValidation.anomaliesDetected.negativePrice, 'negative price is rejected by market-data validation');
+const zeroPriceBars = bars.map((bar) => ({ ...bar })); zeroPriceBars[11].close = 0;
+const zeroPriceValidation = validateMarketDataSeries(zeroPriceBars);
+assert(!zeroPriceValidation.isValid && zeroPriceValidation.anomaliesDetected.negativePrice, 'zero price is rejected by market-data validation');
 const malformedBars = bars.map((bar) => ({ ...bar }));
 malformedBars[10].close = Number.NaN;
 const malformedMarketValidation = validateMarketDataSeries(malformedBars);
