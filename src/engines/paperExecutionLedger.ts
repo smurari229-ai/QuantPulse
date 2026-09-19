@@ -252,6 +252,12 @@ export class PaperExecutionLedger {
       mismatches.push({ category: 'CASH', key: 'cash', localValue: portfolio.cash, externalValue: external.cash, reason: 'Cash balance mismatch.' });
     }
 
+    if (mismatches.length > 0) {
+      GlobalAuditLedger.appendRecord('RECONCILIATION_MISMATCH', 'PAPER_BROKER', {
+        mismatchCount: mismatches.length,
+        categories: [...new Set(mismatches.map((mismatch) => mismatch.category))],
+      }, 'CRITICAL');
+    }
     return { isReconciled: mismatches.length === 0, mismatches };
   }
 }
