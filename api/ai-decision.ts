@@ -42,6 +42,38 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     if (!rawInput || typeof rawInput !== 'object') return res.status(400).json({ error: 'Missing AI feature input.' });
     const input = rawInput as Record<string, any>;
 
+    const indicators = input.indicators as Record<string, unknown> | undefined;
+    const conditions = input.currentMarketConditions as Record<string, unknown> | undefined;
+    const requiredNumbers = [
+      input.currentPrice, indicators?.ema20, indicators?.ema50, indicators?.ema200,
+      indicators?.rsi14, indicators?.atr14, indicators?.relativeVolume,
+      conditions?.spreadBps, conditions?.dataStalenessMs,
+    ];
+    const invalidNumericInput = requiredNumbers.some((value) => value !== undefined && !isFiniteNumber(value));
+    const unsafeMarketInput = !isFiniteNumber(input.currentPrice) || input.currentPrice <= 0
+      || !conditions || !isFiniteNumber(conditions.spreadBps) || conditions.spreadBps < 0
+      || !isFiniteNumber(conditions.dataStalenessMs) || conditions.dataStalenessMs < 0
+      || conditions.dataStalenessMs > 3000
+      || !indicators || !isFiniteNumber(indicators.rsi14) || indicators.rsi14 < 0 || indicators.rsi14 > 100
+      || !isFiniteNumber(indicators.atr14) || indicators.atr14 < 0;
+    const unsafeNewsInput = input.newsSentiment !== undefined
+      && (!input.newsSentiment || typeof input.newsSentiment !== 'object'
+        || !isFiniteNumber((input.newsSentiment as Record<string, unknown>).score)
+        || Number((input.newsSentiment as Record<string, unknown>).score) < -1
+        || Number((input.newsSentiment as Record<string, unknown>).score) > 1);
+    if (invalidNumericInput || unsafeMarketInput || unsafeNewsInput) {
+      return res.status(200).json({
+        signal: 'NO_TRADE', confidence: 0,
+        confidenceCalibrationNote: 'AI confidence is an uncalibrated advisory score, not a probability of profit.',
+        reasoning: 'Server-side validation rejected missing, invalid, or stale market inputs. No actionable AI signal is permitted.',
+        strategy: 'SERVER_INPUT_VALIDATION_HALT',
+        risk_flags: ['SERVER_INPUT_VALIDATION_HALT'],
+        required_checks: ['Refresh and validate market/indicator telemetry before any AI advisory decision is considered.'],
+        generatedAt: Date.now(), modelIdentifier: 'GEMINI-2.5-FLASH-SERVER',
+        featuresUsed: { price: 0, regime: 'UNKNOWN', rsi: 0, trend: 'UNKNOWN', volatilityAtr: 0, volumeCondition: 'UNKNOWN' },
+      });
+    }
+
     const ai = new GoogleGenAI({ apiKey });
     const prompt = [
       'You are the advisory analysis layer of QuantPulse. Return JSON only.',
