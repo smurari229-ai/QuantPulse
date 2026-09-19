@@ -579,5 +579,18 @@ const mismatched = partialLedger.reconcile({
 }, partial3.portfolio!);
 assert(!mismatched.isReconciled && mismatched.mismatches.length >= 3, 'reconciliation detects order, position, and cash mismatches');
 
+
+const aiBaseline = {
+  symbol: 'NIFTY50',
+  timestamp: Date.now(),
+  currentPrice: 24850,
+  indicators: { ema20: 24800, ema50: 24700, ema200: 24000, rsi14: 55, atr14: 120, relativeVolume: 1.1, marketRegime: 'NORMAL' },
+  currentMarketConditions: { spreadBps: 4, dataStalenessMs: 50 },
+};
+const aiInvalidRsi = generateAIDecision({ ...aiBaseline, indicators: { ...aiBaseline.indicators, rsi14: 101 } });
+assert(aiInvalidRsi.signal === 'NO_TRADE' && aiInvalidRsi.confidence === 0 && aiInvalidRsi.risk_flags.includes('INVALID_AI_INPUT_DATA'), 'AI heuristic rejects out-of-range RSI');
+const aiNegativeSpread = generateAIDecision({ ...aiBaseline, currentMarketConditions: { ...aiBaseline.currentMarketConditions, spreadBps: -1 } });
+assert(aiNegativeSpread.signal === 'NO_TRADE' && aiNegativeSpread.confidence === 0, 'AI heuristic rejects negative spread telemetry');
+
 console.log('QUANTPULSE SMOKE TESTS: PASS');
 console.log(JSON.stringify({ bars: bars.length, trades: backtest.trades.length, oosTrades: backtest.outOfSampleMetrics.totalTrades, walkForwardFolds: backtest.walkForwardResults.length }, null, 2));
