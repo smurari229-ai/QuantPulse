@@ -290,6 +290,12 @@ assert(
 assert(backtest.walkForwardResults.length <= params.walkForwardFolds, 'walk-forward result count respects requested folds');
 assert(backtest.equityCurve.every(point => Number.isFinite(point.equity) && Number.isFinite(point.drawdownPct)), 'equity curve values remain finite');
 
+const corruptedBacktestBars = bars.map((bar) => ({ ...bar }));
+corruptedBacktestBars[5].close = Number.NaN;
+let corruptedBacktestRejected = false;
+try { runFullBacktest(corruptedBacktestBars, params); } catch { corruptedBacktestRejected = true; }
+assert(corruptedBacktestRejected, 'backtest rejects malformed market data before simulation');
+
 const zeroSlippageBacktest = runFullBacktest(bars, { ...params, slippageModel: 'ZERO' });
 assert(zeroSlippageBacktest.combinedMetrics.totalSlippageCost === 0, 'ZERO slippage model charges zero slippage');
 assert(backtest.combinedMetrics.totalSlippageCost >= 0, 'FIXED_BPS slippage cost is non-negative');
