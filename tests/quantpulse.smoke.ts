@@ -211,6 +211,19 @@ assert(!maxNotionalVerdict.isApproved && maxNotionalVerdict.checks.some(c => c.c
 const maxNotionalPaperResult = executePaperOrder(maxNotionalOrder, INITIAL_PORTFOLIO_STATE, snapshot);
 assert(maxNotionalPaperResult.status === 'REJECTED' && maxNotionalPaperResult.rejectionReason?.includes('deterministic risk engine'), 'paper execution boundary independently enforces the deterministic risk gate');
 
+const belowNotionalOrder = { ...baseOrder, quantity: (DEFAULT_RISK_CONFIG.maxPositionSizeNotional - 1) / snapshot.ask };
+const atNotionalOrder = { ...baseOrder, quantity: DEFAULT_RISK_CONFIG.maxPositionSizeNotional / snapshot.ask };
+const aboveNotionalOrder = { ...baseOrder, quantity: (DEFAULT_RISK_CONFIG.maxPositionSizeNotional + 1) / snapshot.ask };
+assert(evaluateRiskGates(belowNotionalOrder, INITIAL_PORTFOLIO_STATE, riskSafeSnapshot).checks.find(c => c.checkName === 'MAX_POSITION_NOTIONAL')?.passed === true, 'max-notional boundary accepts one unit below');
+assert(evaluateRiskGates(atNotionalOrder, INITIAL_PORTFOLIO_STATE, riskSafeSnapshot).checks.find(c => c.checkName === 'MAX_POSITION_NOTIONAL')?.passed === true, 'max-notional boundary accepts exactly at limit');
+assert(evaluateRiskGates(aboveNotionalOrder, INITIAL_PORTFOLIO_STATE, riskSafeSnapshot).checks.find(c => c.checkName === 'MAX_POSITION_NOTIONAL')?.passed === false, 'max-notional boundary rejects one unit above');
+const exactDailyLossPortfolio = { ...INITIAL_PORTFOLIO_STATE, dayStartEquity: 100000, dayStartTimestamp: Date.now(), equity: 97000 };
+const belowDailyLossPortfolio = { ...exactDailyLossPortfolio, equity: 97001 };
+const aboveDailyLossPortfolio = { ...exactDailyLossPortfolio, equity: 96999 };
+assert(evaluateRiskGates(baseOrder, belowDailyLossPortfolio, riskSafeSnapshot).checks.find(c => c.checkName === 'MAX_DAILY_LOSS')?.passed === true, 'daily-loss boundary accepts one unit inside limit');
+assert(evaluateRiskGates(baseOrder, exactDailyLossPortfolio, riskSafeSnapshot).checks.find(c => c.checkName === 'MAX_DAILY_LOSS')?.passed === false, 'daily-loss boundary rejects exactly at halt threshold');
+assert(evaluateRiskGates(baseOrder, aboveDailyLossPortfolio, riskSafeSnapshot).checks.find(c => c.checkName === 'MAX_DAILY_LOSS')?.passed === false, 'daily-loss boundary rejects beyond halt threshold');
+
 const customRiskConfig = { ...DEFAULT_RISK_CONFIG, maxPositionSizeNotional: 1 };
 const settingsDrivenVerdict = evaluateRiskGates(baseOrder, INITIAL_PORTFOLIO_STATE, snapshot, undefined, customRiskConfig);
 const invalidConfigVerdict = evaluateRiskGates(baseOrder, INITIAL_PORTFOLIO_STATE, snapshot, undefined, { ...DEFAULT_RISK_CONFIG, maxSpreadBps: Number.NaN });
