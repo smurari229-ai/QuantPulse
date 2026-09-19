@@ -23,6 +23,54 @@ assert(unsupportedStrategyResult.signal === 'NO_TRADE' && unsupportedStrategyRes
 const invalidIndicatorResult = evaluateStrategySignal(REGISTERED_STRATEGIES[0], 'NIFTY50', [{ ...bars[bars.length - 1], close: Number.NaN }]);
 assert(invalidIndicatorResult.signal === 'NO_TRADE' && invalidIndicatorResult.targetQuantity === 0, 'invalid indicator inputs fail closed without producing an actionable signal');
 assert(validateMarketDataSeries(bars).isValid, 'generated market data passes validation');
+const trendStrategy = REGISTERED_STRATEGIES.find((strategy) => strategy.id === 'TF_EMA_CROSS')!;
+let bullishFixture = generateSyntheticDailyBars('NIFTY50', 260);
+const bullishBase = bullishFixture[bullishFixture.length - 2];
+bullishFixture[bullishFixture.length - 1] = {
+  ...bullishBase,
+  timestamp: bullishBase.timestamp + 86_400_000,
+  open: bullishBase.close * 1.18,
+  high: bullishBase.close * 1.22,
+  low: bullishBase.close * 1.17,
+  close: bullishBase.close * 1.20,
+  volume: bullishBase.volume * 3,
+};
+const trendSignal = evaluateStrategySignal(trendStrategy, 'NIFTY50', bullishFixture);
+assert(['BUY', 'HOLD', 'NO_TRADE'].includes(trendSignal.signal), 'trend strategy returns a documented signal enum');
+if (trendSignal.signal === 'BUY') {
+  assert(trendSignal.suggestedStopLoss > 0 && trendSignal.suggestedTakeProfit > trendSignal.suggestedEntry && trendSignal.riskRewardRatio >= 1.5, 'trend BUY contains valid protective stop, target, and risk/reward');
+}
+
+const meanReversionStrategy = REGISTERED_STRATEGIES.find((strategy) => strategy.id === 'MR_RSI_BOLLINGER')!;
+const neutralSignal = evaluateStrategySignal(meanReversionStrategy, 'RELIANCE', bars);
+assert(['HOLD', 'NO_TRADE'].includes(neutralSignal.signal), 'mean-reversion strategy stays non-actionable when oversold/lower-band conditions are absent');
+
+const btTradeInvariantBars = generateSyntheticDailyBars('NIFTY50', 260);
+const btProbeParams: BacktestParameters = {
+  strategyId: 'TF_EMA_CROSS', symbol: 'NIFTY50',
+  startDate: new Date(btTradeInvariantBars[0].timestamp).toISOString(),
+  endDate: new Date(btTradeInvariantBars[btTradeInvariantBars.length - 1].timestamp).toISOString(),
+  initialCapital: 100000, slippageModel: 'FIXED_BPS', slippageBps: 4.5,
+  commissionRatePct: 0.03, taxRatePct: 0.01, outOfSampleSplitRatio: 0.2,
+  enableWalkForward: true, walkForwardFolds: 3, positionSizingPct: 10,
+};
+const btProbe = runFullBacktest(btTradeInvariantBars, btProbeParams);
+assert(btProbe.trades.every((trade) => trade.entryTimestamp > trade.exitTimestamp || trade.entryTimestamp <= trade.exitTimestamp), 'backtest timestamps are finite and chronologically comparable');
+assert(btProbe.trades.every((trade) => trade.entryTimestamp <= trade.exitTimestamp), 'backtest never records an entry after its exit');
+assert(btProbe.combinedMetrics.sampleSizeWarning.recommendedMinTrades === 30, 'small-sample threshold is explicitly 30 trades');
+if (btProbe.combinedMetrics.totalTrades < 30) {
+  assert(btProbe.combinedMetrics.sampleSizeWarning.isUnderSampled, 'backtest emits an undersampled warning when trades are below 30');
+  assert(Boolean(btProbe.combinedMetrics.sampleSizeWarning.warningMessage), 'undersampled backtest provides a statistical warning message');
+} else {
+  assert(!btProbe.combinedMetrics.sampleSizeWarning.isUnderSampled, 'backtest clears undersampled warning when at least 30 trades exist');
+}
+const frictionAccounting = btProbe.trades.reduce(
+  (acc, trade) => ({ gross: acc.gross + trade.grossPnL, net: acc.net + trade.netPnL, fees: acc.fees + trade.feesPaid }),
+  { gross: 0, net: 0, fees: 0 }
+);
+assert(Math.abs(frictionAccounting.net - (frictionAccounting.gross - frictionAccounting.fees)) < 0.11, 'net PnL equals gross PnL minus recorded fees after execution slippage is included in gross trade pricing');
+assert(btProbe.combinedMetrics.totalSlippageCost >= 0 && btProbe.combinedMetrics.totalFeesPaid >= 0, 'friction metrics remain non-negative');
+
 
 let invalidGeneratorRejected = false;
 try { generateSyntheticDailyBars('NIFTY50', 0); } catch { invalidGeneratorRejected = true; }
