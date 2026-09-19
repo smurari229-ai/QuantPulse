@@ -5,6 +5,8 @@ import { INITIAL_PORTFOLIO_STATE, executePaperOrder } from '../src/engines/paper
 import { triggerEmergencyKillSwitch, resetKillSwitchWithVerification, canSubmitOrders } from '../src/engines/killSwitchEngine';
 import { runFullBacktest } from '../src/engines/backtestingLab';
 import { evaluateStrategySignal, REGISTERED_STRATEGIES } from '../src/engines/strategyEngine';
+import { calculateEMA, calculateRSI } from '../src/engines/marketAnalysisEngine';
+import { generateAIDecision } from '../src/engines/aiDecisionEngine';
 import { AuditLogChain } from '../src/engines/auditEngine';
 import type { OrderRequest } from '../src/types/order';
 import type { BacktestParameters } from '../src/types/backtest';
@@ -21,6 +23,59 @@ assert(unsupportedStrategyResult.signal === 'NO_TRADE' && unsupportedStrategyRes
 const invalidIndicatorResult = evaluateStrategySignal(REGISTERED_STRATEGIES[0], 'NIFTY50', [{ ...bars[bars.length - 1], close: Number.NaN }]);
 assert(invalidIndicatorResult.signal === 'NO_TRADE' && invalidIndicatorResult.targetQuantity === 0, 'invalid indicator inputs fail closed without producing an actionable signal');
 assert(validateMarketDataSeries(bars).isValid, 'generated market data passes validation');
+const trendStrategy = REGISTERED_STRATEGIES.find((strategy) => strategy.id === 'TF_EMA_CROSS')!;
+const bullishFixture = Array.from({ length: 103 }, (_, i) => {
+  const closes = i < 100 ? 100 : i === 100 ? 94 : i === 101 ? 99.5 : 105;
+  const previousClose = i === 0 ? closes : (i - 1 < 100 ? 100 : i - 1 === 100 ? 94 : 99.5);
+  const open = previousClose;
+  const high = Math.max(open, closes) * 1.001;
+  const low = Math.min(open, closes) * 0.999;
+  return { timestamp: Date.now() - (103 - i) * 86_400_000, open, high, low, close: closes, volume: i === 102 ? 3_000_000 : 1_000_000 };
+});
+const trendSignal = evaluateStrategySignal(trendStrategy, 'NIFTY50', bullishFixture);
+assert(trendSignal.signal === 'BUY', 'trend strategy generates the required BUY signal on a deterministic bullish crossover fixture');
+assert(trendSignal.suggestedStopLoss > 0 && trendSignal.suggestedTakeProfit > trendSignal.suggestedEntry && trendSignal.riskRewardRatio >= 1.5, 'trend BUY contains valid protective stop, target, and risk/reward');
+
+const meanReversionStrategy = REGISTERED_STRATEGIES.find((strategy) => strategy.id === 'MR_RSI_BOLLINGER')!;
+const neutralSignal = evaluateStrategySignal(meanReversionStrategy, 'RELIANCE', bars);
+assert(['HOLD', 'NO_TRADE'].includes(neutralSignal.signal), 'mean-reversion strategy stays non-actionable when oversold/lower-band conditions are absent');
+
+const btTradeInvariantBars = generateSyntheticDailyBars('NIFTY50', 260);
+const btProbeParams: BacktestParameters = {
+  strategyId: 'TF_EMA_CROSS', symbol: 'NIFTY50',
+  startDate: new Date(btTradeInvariantBars[0].timestamp).toISOString(),
+  endDate: new Date(btTradeInvariantBars[btTradeInvariantBars.length - 1].timestamp).toISOString(),
+  initialCapital: 100000, slippageModel: 'FIXED_BPS', slippageBps: 4.5,
+  commissionRatePct: 0.03, taxRatePct: 0.01, outOfSampleSplitRatio: 0.2,
+  enableWalkForward: true, walkForwardFolds: 3, positionSizingPct: 10,
+};
+const btProbe = runFullBacktest(btTradeInvariantBars, btProbeParams);
+assert(btProbe.trades.every((trade) => trade.entryTimestamp > trade.exitTimestamp || trade.entryTimestamp <= trade.exitTimestamp), 'backtest timestamps are finite and chronologically comparable');
+assert(btProbe.trades.every((trade) => trade.entryTimestamp <= trade.exitTimestamp), 'backtest never records an entry after its exit');
+const btCloses = btTradeInvariantBars.map((bar) => bar.close);
+const btEma20 = calculateEMA(btCloses, 20);
+const btEma50 = calculateEMA(btCloses, 50);
+const btRsi = calculateRSI(btCloses, 14);
+const lookAheadSafeEntryTimestamps = new Set<number>();
+for (let i = 24; i < btTradeInvariantBars.length - 1; i++) {
+  const signalActive = btEma20[i] > btEma50[i] && btEma20[i - 1] <= btEma50[i - 1] && btRsi[i] < 65;
+  if (signalActive) lookAheadSafeEntryTimestamps.add(btTradeInvariantBars[i + 1].timestamp);
+}
+assert(btProbe.trades.every((trade) => lookAheadSafeEntryTimestamps.has(trade.entryTimestamp)), 'backtest entries occur only on the bar immediately after a signal bar, with no future-bar entry timing');
+assert(btProbe.combinedMetrics.sampleSizeWarning.recommendedMinTrades === 30, 'small-sample threshold is explicitly 30 trades');
+if (btProbe.combinedMetrics.totalTrades < 30) {
+  assert(btProbe.combinedMetrics.sampleSizeWarning.isUnderSampled, 'backtest emits an undersampled warning when trades are below 30');
+  assert(Boolean(btProbe.combinedMetrics.sampleSizeWarning.warningMessage), 'undersampled backtest provides a statistical warning message');
+} else {
+  assert(!btProbe.combinedMetrics.sampleSizeWarning.isUnderSampled, 'backtest clears undersampled warning when at least 30 trades exist');
+}
+const frictionAccounting = btProbe.trades.reduce(
+  (acc, trade) => ({ gross: acc.gross + trade.grossPnL, net: acc.net + trade.netPnL, fees: acc.fees + trade.feesPaid }),
+  { gross: 0, net: 0, fees: 0 }
+);
+assert(Math.abs(frictionAccounting.net - (frictionAccounting.gross - frictionAccounting.fees)) < 0.11, 'net PnL equals gross PnL minus recorded fees after execution slippage is included in gross trade pricing');
+assert(btProbe.combinedMetrics.totalSlippageCost >= 0 && btProbe.combinedMetrics.totalFeesPaid >= 0, 'friction metrics remain non-negative');
+
 
 let invalidGeneratorRejected = false;
 try { generateSyntheticDailyBars('NIFTY50', 0); } catch { invalidGeneratorRejected = true; }
@@ -39,6 +94,12 @@ assert(!evaluateRiskGates({
   executionMode: 'PAPER', timestamp: Date.now(),
 }, INITIAL_PORTFOLIO_STATE, latencySnapshot).checks.find(c => c.checkName === 'STALE_DATA_GUARD')?.passed, '5-second simulated latency trips stale-data risk gate');
 
+const negativePriceBars = bars.map((bar) => ({ ...bar })); negativePriceBars[11].close = -1;
+const negativePriceValidation = validateMarketDataSeries(negativePriceBars);
+assert(!negativePriceValidation.isValid && negativePriceValidation.anomaliesDetected.negativePrice, 'negative price is rejected by market-data validation');
+const zeroPriceBars = bars.map((bar) => ({ ...bar })); zeroPriceBars[11].close = 0;
+const zeroPriceValidation = validateMarketDataSeries(zeroPriceBars);
+assert(!zeroPriceValidation.isValid && zeroPriceValidation.anomaliesDetected.negativePrice, 'zero price is rejected by market-data validation');
 const malformedBars = bars.map((bar) => ({ ...bar }));
 malformedBars[10].close = Number.NaN;
 const malformedMarketValidation = validateMarketDataSeries(malformedBars);
@@ -55,6 +116,14 @@ assert(!negativeVolumeValidation.isValid && negativeVolumeValidation.errors.some
 
 const snapshot = generateMarketSnapshot('NIFTY50', bars[bars.length - 1].close);
 const riskSafeSnapshot = { ...snapshot, timestamp: Date.now(), dataQuality: { ...snapshot.dataQuality, isStale: false, latencyMs: 45, isValidated: true } };
+
+const staleHeuristicDecision = generateAIDecision({
+  symbol: 'NIFTY50', timestamp: Date.now(), currentPrice: snapshot.lastPrice,
+  indicators: { ema20: snapshot.lastPrice, ema50: snapshot.lastPrice, ema200: snapshot.lastPrice, rsi14: 55, atr14: snapshot.lastPrice * 0.01, relativeVolume: 1, marketRegime: 'BULLISH' } as any,
+  currentMarketConditions: { spreadBps: 4, dataStalenessMs: 5001 },
+});
+assert(staleHeuristicDecision.signal === 'NO_TRADE' && staleHeuristicDecision.confidence === 0 && staleHeuristicDecision.strategy === 'STALE_DATA_HALT', 'heuristic AI fails closed to NO_TRADE when market data is stale');
+
 
 const baseOrder: OrderRequest = {
   id: 'SMOKE-01', orderId: 'SMOKE-01', clientOrderId: 'SMOKE-CLI-01', symbol: 'NIFTY50', side: 'BUY',
@@ -203,6 +272,43 @@ assert(goodReset.success && !goodReset.updatedState.isEmergencyStopTripped, 'cor
 const paperOnlyState = { ...goodReset.updatedState, isPaperOnlyLocked: true };
 assert(!canSubmitOrders(paperOnlyState).allowed && canSubmitOrders(paperOnlyState).reason === 'PAPER_ONLY_LOCK_ACTIVE', 'paper-only lock blocks order submission even when other kill-switch flags are clear');
 
+const manuallyLockedState = { ...INITIAL_KILL_SWITCH_STATE, isGlobalTradingOff: true, requiresManualReset: false };
+const unauthorizedOperationalReset = resetKillSwitchWithVerification(manuallyLockedState, '');
+assert(!unauthorizedOperationalReset.success && unauthorizedOperationalReset.updatedState.isGlobalTradingOff, 'active operational lock cannot be cleared without out-of-band authorization even when reset flag is malformed');
+
+const emaFixture = [10, 11, 12, 13, 14];
+const ema = calculateEMA(emaFixture, 3);
+assert(ema.length === emaFixture.length && Math.abs(ema[1] - 10.5) < 1e-10 && Math.abs(ema[4] - 13.0625) < 1e-10, 'EMA matches the recursive mathematical formula on a known fixture');
+const rsi = calculateRSI([100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116, 117, 118, 119], 14);
+assert(rsi.every((value) => Number.isFinite(value) && value >= 0 && value <= 100), 'RSI remains finite and bounded to [0, 100]');
+
+const missingStopVerdict = evaluateRiskGates(
+  { ...baseOrder, id: 'SMOKE-STOPLOSS-01', orderId: 'SMOKE-STOPLOSS-01', stopLossPrice: 0 },
+  INITIAL_PORTFOLIO_STATE,
+  riskSafeSnapshot
+);
+assert(!missingStopVerdict.isApproved && missingStopVerdict.checks.some(c => c.checkName === 'MANDATORY_STOP_LOSS' && !c.passed), 'mandatory stop-loss gate rejects an order without a valid stop');
+
+const lossLockedPortfolio = { ...INITIAL_PORTFOLIO_STATE, dayStartEquity: 100000, dayStartTimestamp: Date.now() - 60_000, equity: 96800 };
+const dailyLossVerdict = evaluateRiskGates(baseOrder, lossLockedPortfolio, riskSafeSnapshot);
+assert(!dailyLossVerdict.isApproved && dailyLossVerdict.checks.some(c => c.checkName === 'MAX_DAILY_LOSS' && !c.passed), 'daily-loss circuit breaker rejects new orders after the configured loss limit');
+
+const duplicateVerdict = evaluateRiskGates(
+  baseOrder,
+  INITIAL_PORTFOLIO_STATE,
+  riskSafeSnapshot,
+  { recentOrders: [{ id: 'DUP-1', symbol: baseOrder.symbol, side: baseOrder.side, quantity: baseOrder.quantity, timestamp: Date.now() - 10_000 }] }
+);
+assert(!duplicateVerdict.isApproved && duplicateVerdict.checks.some(c => c.checkName === 'DUPLICATE_ORDER_DETECTION' && !c.passed), 'duplicate-order gate suppresses an identical order inside the configured window');
+
+const heartbeatVerdict = evaluateRiskGates(baseOrder, INITIAL_PORTFOLIO_STATE, riskSafeSnapshot, { brokerHeartbeatActive: false });
+assert(!heartbeatVerdict.isApproved && heartbeatVerdict.checks.some(c => c.checkName === 'BROKER_CONNECTIVITY_HEARTBEAT' && !c.passed), 'broker heartbeat failure blocks order routing');
+
+const invertedBars = bars.map((bar) => ({ ...bar }));
+invertedBars[12].high = invertedBars[12].low - 1;
+const invertedValidation = validateMarketDataSeries(invertedBars);
+assert(!invertedValidation.isValid && invertedValidation.anomaliesDetected.highLowInversion, 'market-data validator rejects High/Low inversion');
+
 const auditLedger = new AuditLogChain();
 const auditRecord = auditLedger.appendRecord(
   'RISK_GATE_REJECTED',
@@ -275,6 +381,12 @@ assert(
 assert(backtest.walkForwardResults.length <= params.walkForwardFolds, 'walk-forward result count respects requested folds');
 assert(backtest.equityCurve.every(point => Number.isFinite(point.equity) && Number.isFinite(point.drawdownPct)), 'equity curve values remain finite');
 
+const corruptedBacktestBars = bars.map((bar) => ({ ...bar }));
+corruptedBacktestBars[5].close = Number.NaN;
+let corruptedBacktestRejected = false;
+try { runFullBacktest(corruptedBacktestBars, params); } catch { corruptedBacktestRejected = true; }
+assert(corruptedBacktestRejected, 'backtest rejects malformed market data before simulation');
+
 const zeroSlippageBacktest = runFullBacktest(bars, { ...params, slippageModel: 'ZERO' });
 assert(zeroSlippageBacktest.combinedMetrics.totalSlippageCost === 0, 'ZERO slippage model charges zero slippage');
 assert(backtest.combinedMetrics.totalSlippageCost >= 0, 'FIXED_BPS slippage cost is non-negative');
@@ -294,12 +406,8 @@ let unsupportedPublicBacktestRejected = false;
 try { runFullBacktest(bars, { ...params, symbol: 'UNSUPPORTED' as any }); } catch { unsupportedPublicBacktestRejected = true; }
 assert(unsupportedPublicBacktestRejected, 'public backtest entry rejects unsupported symbols');
 
-console.log('QUANTPULSE SMOKE TESTS: PASS');
-console.log(JSON.stringify({ bars: bars.length, trades: backtest.trades.length, oosTrades: backtest.outOfSampleMetrics.totalTrades, walkForwardFolds: backtest.walkForwardResults.length }, null, 2));
-
-
 const liveHealth = await BLOCKED_LIVE_BROKER_ADAPTER.getHealth();
-assert(liveHealth.liveTradingAuthorized === false, 'Live broker adapter must remain unauthorized by default');
+assert(liveHealth.connected === false && liveHealth.authenticated === false && liveHealth.liveTradingAuthorized === false, 'Live broker adapter health must remain disconnected and unauthorized by default');
 let liveSubmitBlocked = false;
 try {
   await BLOCKED_LIVE_BROKER_ADAPTER.submitOrder({} as any);
@@ -307,3 +415,20 @@ try {
   liveSubmitBlocked = String(error).includes('LIVE_ORDER_BLOCKED');
 }
 assert(liveSubmitBlocked, 'Live broker adapter must fail closed without authorization');
+let liveCancelBlocked = false;
+try {
+  await BLOCKED_LIVE_BROKER_ADAPTER.cancelOrder('SMOKE-LIVE-CANCEL');
+} catch (error) {
+  liveCancelBlocked = String(error).includes('LIVE_CANCEL_BLOCKED');
+}
+assert(liveCancelBlocked, 'Live broker cancellation must fail closed without authorization');
+let liveReconciliationBlocked = false;
+try {
+  await BLOCKED_LIVE_BROKER_ADAPTER.reconcilePortfolio();
+} catch (error) {
+  liveReconciliationBlocked = String(error).includes('LIVE_RECONCILIATION_BLOCKED');
+}
+assert(liveReconciliationBlocked, 'Live broker reconciliation must fail closed without authorization');
+
+console.log('QUANTPULSE SMOKE TESTS: PASS');
+console.log(JSON.stringify({ bars: bars.length, trades: backtest.trades.length, oosTrades: backtest.outOfSampleMetrics.totalTrades, walkForwardFolds: backtest.walkForwardResults.length }, null, 2));

@@ -13,6 +13,18 @@ function isFiniteNumber(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value);
 }
 
+function validateInput(input: Record<string, any>) {
+  if (typeof input.symbol !== 'string' || input.symbol.trim().length === 0 || input.symbol.length > 50) throw new Error('AI symbol input is invalid.');
+  if (!isFiniteNumber(input.currentPrice) || input.currentPrice <= 0) throw new Error('AI current price is invalid.');
+  if (!input.indicators || typeof input.indicators !== 'object') throw new Error('AI indicators are missing.');
+  for (const key of ['ema20', 'ema50', 'ema200', 'rsi14', 'atr14']) {
+    if (!isFiniteNumber(input.indicators[key])) throw new Error(`AI indicator ${key} is invalid.`);
+  }
+  if (input.indicators.rsi14 < 0 || input.indicators.rsi14 > 100 || input.indicators.atr14 < 0) throw new Error('AI indicator bounds are invalid.');
+  if (!input.currentMarketConditions || !isFiniteNumber(input.currentMarketConditions.spreadBps) || !isFiniteNumber(input.currentMarketConditions.dataStalenessMs)) throw new Error('AI market-condition telemetry is invalid.');
+  if (input.currentMarketConditions.spreadBps < 0 || input.currentMarketConditions.dataStalenessMs < 0) throw new Error('AI market-condition telemetry is out of bounds.');
+}
+
 function validateDecision(value: unknown) {
   if (!value || typeof value !== 'object') throw new Error('AI response must be an object.');
   const d = value as Record<string, unknown>;
@@ -41,6 +53,10 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     const rawInput = body.input;
     if (!rawInput || typeof rawInput !== 'object') return res.status(400).json({ error: 'Missing AI feature input.' });
     const input = rawInput as Record<string, any>;
+    validateInput(input);
+    if (input.currentMarketConditions.dataStalenessMs > 3000) {
+      return res.status(503).json({ error: 'Gemini advisory blocked because market data is stale beyond the deterministic safety threshold.' });
+    }
 
     const ai = new GoogleGenAI({ apiKey });
     const prompt = [
@@ -55,7 +71,21 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash',
       contents: prompt,
-      config: { responseMimeType: 'application/json' },
+      config: {
+        responseMimeType: 'application/json',
+        responseSchema: {
+          type: 'object',
+          properties: {
+            signal: { type: 'string', enum: ['BUY', 'SELL', 'HOLD', 'NO_TRADE'] },
+            confidence: { type: 'number' },
+            reasoning: { type: 'string' },
+            strategy: { type: 'string' },
+            risk_flags: { type: 'array', items: { type: 'string' } },
+            required_checks: { type: 'array', items: { type: 'string' } },
+          },
+          required: ['signal', 'confidence', 'reasoning', 'strategy', 'risk_flags', 'required_checks'],
+        },
+      },
     });
 
     const responseText = response.text ?? '{}';

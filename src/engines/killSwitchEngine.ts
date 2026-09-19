@@ -82,7 +82,17 @@ export function resetKillSwitchWithVerification(
   currentState: KillSwitchState,
   enteredCode: string
 ): { success: boolean; updatedState: KillSwitchState; error?: string } {
-  if (!currentState.requiresManualReset) {
+  const hasActiveOperationalLock = currentState.isGlobalTradingOff
+    || currentState.isEmergencyStopTripped
+    || currentState.isDailyLossLockTripped
+    || currentState.isApiFailureLockTripped
+    || currentState.isDataStaleLockTripped
+    || currentState.isAbnormalFrequencyLockTripped;
+
+  // Any active operational lock requires the out-of-band authorization code.
+  // Do not trust requiresManualReset alone because a malformed/stale state could
+  // otherwise clear a safety lock without authorization.
+  if (!currentState.requiresManualReset && !hasActiveOperationalLock) {
     return {
       success: true,
       updatedState: {

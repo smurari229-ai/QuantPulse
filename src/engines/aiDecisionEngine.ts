@@ -44,8 +44,14 @@ export function generateAIDecision(features: AIFeatureInput): AIDecisionOutput {
   }
 
   if (currentMarketConditions.dataStalenessMs > 3000) {
-    risk_flags.push('DATA_STALENESS_EXCEEDS_MAX_TOLERANCE');
-    required_checks.push('Verify feed latency with broker gateway');
+    return {
+      signal: 'NO_TRADE', confidence: 0, confidenceCalibrationNote: AI_CONFIDENCE_DISCLOSURE,
+      reasoning: 'Market data is stale beyond the deterministic safety threshold. No trading decision is permitted until fresh validated data is available.',
+      strategy: 'STALE_DATA_HALT', risk_flags: ['DATA_STALENESS_EXCEEDS_MAX_TOLERANCE'],
+      required_checks: ['Refresh and validate market data before any order is considered'],
+      generatedAt: Date.now(), modelIdentifier: 'HEURISTIC-QUANT-DECISION-V2.5',
+      featuresUsed: { price: currentPrice, regime: indicators.marketRegime, rsi: indicators.rsi14, trend: 'UNKNOWN', volatilityAtr: indicators.atr14, volumeCondition: 'UNKNOWN' },
+    };
   }
 
   if (currentMarketConditions.spreadBps > 15) {
