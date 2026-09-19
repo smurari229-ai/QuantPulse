@@ -542,6 +542,19 @@ assert(cancelled.success && cancelled.order?.lifecycle.state === 'CANCELLED' && 
 assert(cancelLedger.getReservedCash() === 0, 'cancellation releases the remaining BUY reservation');
 const lateFill = cancelLedger.recordFill(cancelOrder.id, { ...makePartialFill('FILL-C-LATE', 10, 101), orderId: cancelOrder.id, brokerOrderId: 'BROKER-CANCEL-1' }, cancelFill.portfolio!, partialSnapshot, 'EVENT-C-LATE');
 assert(!lateFill.success && lateFill.reason?.includes('CANCELLED'), 'late fill after completed cancellation is rejected fail-closed');
+const stagedCancelOrder: OrderRequest = { ...partialOrder, id: 'SMOKE-STAGED-CANCEL', orderId: 'SMOKE-STAGED-CANCEL', clientOrderId: 'SMOKE-STAGED-CANCEL-CLI' };
+const stagedCancelLedger = new PaperExecutionLedger();
+assert(stagedCancelLedger.submitOrder(stagedCancelOrder, 'SUBMIT-STAGED').success, 'staged partial-fill cancellation order submits');
+let stagedPortfolio = partialPortfolio;
+for (const [id, qty, price] of [['FILL-S-30', 30, 100], ['FILL-S-20', 20, 101], ['FILL-S-20B', 20, 102]] as const) {
+  const staged = stagedCancelLedger.recordFill(stagedCancelOrder.id, { ...makePartialFill(id, qty, price), orderId: stagedCancelOrder.id, brokerOrderId: 'BROKER-STAGED' }, stagedPortfolio, partialSnapshot, `EVENT-${id}`);
+  assert(staged.success && staged.portfolio, `staged fill ${id} is applied`);
+  stagedPortfolio = staged.portfolio!;
+}
+assert(stagedCancelLedger.getOrder(stagedCancelOrder.id)?.filledQuantity === 70, '30+20+20 staged fills produce 70 filled units');
+const stagedCancelled = stagedCancelLedger.cancelOrder(stagedCancelOrder.id, 'EVENT-STAGED-CANCEL');
+assert(stagedCancelled.success && stagedCancelled.order?.lifecycle.state === 'CANCELLED' && stagedCancelled.order.remainingQuantity === 0, '30+20+20 order cancels its remaining 30 units safely');
+
 
 const secondOrder: OrderRequest = { ...partialOrder, id: 'SMOKE-BROKER-ID-2', orderId: 'SMOKE-BROKER-ID-2', clientOrderId: 'SMOKE-BROKER-ID-2-CLI' };
 const brokerIdConflict = partialLedger.submitOrder(secondOrder, 'SUBMIT-BROKER-2');
