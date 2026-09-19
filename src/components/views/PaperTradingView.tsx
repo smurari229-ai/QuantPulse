@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { OrderRequest, PortfolioState, RiskValidationVerdict } from '../../types/order';
+import { OrderRequest, PortfolioState, RiskValidationVerdict, SystemExecutionMode } from '../../types/order';
 import { MarketDataSnapshot } from '../../types/market';
 import { RiskEngineConfig } from '../../types/risk';
 import { executePaperOrder } from '../../engines/paperTradingEngine';
@@ -7,6 +7,7 @@ import { evaluateRiskGates, RecentOrderContext } from '../../engines/riskEngine'
 import { ClipboardList, ShieldAlert, ArrowRight, RefreshCw } from 'lucide-react';
 
 interface PaperTradingViewProps {
+  executionMode: SystemExecutionMode;
   portfolio: PortfolioState;
   riskConfig: RiskEngineConfig;
   marketSnapshot: MarketDataSnapshot;
@@ -16,7 +17,7 @@ interface PaperTradingViewProps {
   onRiskVerdictGenerated: (verdict: RiskValidationVerdict) => void;
 }
 
-export const PaperTradingView: React.FC<PaperTradingViewProps> = ({ portfolio, riskConfig, marketSnapshot, isEmergencyKillSwitchActive = false, riskContext, onOrderExecuted, onRiskVerdictGenerated }) => {
+export const PaperTradingView: React.FC<PaperTradingViewProps> = ({ executionMode, portfolio, riskConfig, marketSnapshot, isEmergencyKillSwitchActive = false, riskContext, onOrderExecuted, onRiskVerdictGenerated }) => {
   const symbol = marketSnapshot.symbol;
   const [side, setSide] = useState<'BUY' | 'SELL'>('BUY');
   const [orderType, setOrderType] = useState<'MARKET' | 'LIMIT'>('MARKET');
@@ -45,6 +46,7 @@ export const PaperTradingView: React.FC<PaperTradingViewProps> = ({ portfolio, r
   const estimatedSTT = notionalValue * 0.00012;
 
   const handleSubmitOrder = () => {
+    if (executionMode !== 'PAPER') { setExecutionLog(prev => [`[${new Date().toLocaleTimeString()}] REJECTED: Execution mode is ${executionMode}; paper orders are disabled.`, ...prev]); return; }
     if (isEmergencyKillSwitchActive) { setExecutionLog(prev => [`[${new Date().toLocaleTimeString()}] REJECTED: Emergency kill switch is active.`, ...prev]); return; }
     if (!Number.isFinite(quantity) || quantity <= 0 || !Number.isFinite(referencePrice) || referencePrice <= 0) return;
     setIsSubmitting(true);
@@ -76,7 +78,7 @@ export const PaperTradingView: React.FC<PaperTradingViewProps> = ({ portfolio, r
           <div><label className="text-slate-400 text-[10px] block mb-1">TAKE-PROFIT TARGET ($) *</label><input type="number" step="0.05" value={takeProfitPrice} onChange={e => setTakeProfitPrice(Number(e.target.value))} className="w-full bg-slate-950 border border-slate-800 rounded px-2.5 py-1.5 text-emerald-300" /></div>
         </div>
         <div className="p-3.5 bg-slate-950/60 rounded border border-slate-800 font-mono text-xs"><span className="text-slate-400 text-[11px] font-bold block uppercase mb-2">Pre-Trade Friction Estimate</span><div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-[11px]"><div><span className="text-slate-500 block">Gross Notional</span><span className="text-slate-200 font-bold">${notionalValue.toFixed(2)}</span></div><div><span className="text-slate-500 block">Est. Slippage</span><span className="text-amber-400 font-semibold">${estimatedSlippage.toFixed(2)}</span></div><div><span className="text-slate-500 block">Brokerage & Taxes</span><span className="text-amber-400 font-semibold">${(estimatedBrokerage + estimatedSTT).toFixed(2)}</span></div><div><span className="text-slate-500 block">Total Estimate</span><span className="text-rose-400 font-bold">${(estimatedSlippage + estimatedBrokerage + estimatedSTT).toFixed(2)}</span></div></div></div>
-        <button type="button" onClick={handleSubmitOrder} disabled={isSubmitting || isEmergencyKillSwitchActive} className={`w-full py-2.5 rounded font-bold font-mono text-xs flex items-center justify-center space-x-2 ${isEmergencyKillSwitchActive ? 'bg-slate-700' : side === 'BUY' ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-rose-600 hover:bg-rose-700'} text-white disabled:opacity-50`}>{isSubmitting ? <><RefreshCw className="w-4 h-4 animate-spin" /><span>Evaluating Risk Gates...</span></> : <><ArrowRight className="w-4 h-4" /><span>{isEmergencyKillSwitchActive ? 'ORDERS BLOCKED BY KILL SWITCH' : `SUBMIT ${side} ORDER TO RISK ENGINE`}</span></>}</button>
+        <button type="button" onClick={handleSubmitOrder} disabled={isSubmitting || isEmergencyKillSwitchActive || executionMode !== 'PAPER'} className={`w-full py-2.5 rounded font-bold font-mono text-xs flex items-center justify-center space-x-2 ${isEmergencyKillSwitchActive ? 'bg-slate-700' : side === 'BUY' ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-rose-600 hover:bg-rose-700'} text-white disabled:opacity-50`}>{isSubmitting ? <><RefreshCw className="w-4 h-4 animate-spin" /><span>Evaluating Risk Gates...</span></> : <><ArrowRight className="w-4 h-4" /><span>{isEmergencyKillSwitchActive ? 'ORDERS BLOCKED BY KILL SWITCH' : executionMode !== 'PAPER' ? 'PAPER ORDERS DISABLED IN CURRENT MODE' : `SUBMIT ${side} ORDER TO RISK ENGINE`}</span></>}</button>
       </div>
       <div className="bg-slate-900 border border-slate-800 rounded-lg p-4 flex flex-col space-y-3"><div className="flex justify-between items-center border-b border-slate-800 pb-2"><h3 className="text-xs font-mono font-bold text-slate-200">EXECUTION AUDIT STREAM</h3><span className="text-[10px] font-mono text-slate-500">{executionLog.length} Events</span></div><div className="flex-1 bg-slate-950/80 rounded border border-slate-800/80 p-2.5 overflow-y-auto max-h-80 space-y-2 text-[11px] font-mono">{executionLog.length === 0 ? <div className="text-slate-600 text-center py-10">Awaiting order submission.</div> : executionLog.map((log, index) => <div key={index} className="p-2 bg-slate-900/60 rounded border border-slate-800/60 text-slate-300">{log}</div>)}</div></div>
     </div>
