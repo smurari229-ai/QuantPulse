@@ -21,8 +21,15 @@ function validateInput(input: Record<string, any>) {
     if (!isFiniteNumber(input.indicators[key])) throw new Error(`AI indicator ${key} is invalid.`);
   }
   if (input.indicators.rsi14 < 0 || input.indicators.rsi14 > 100 || input.indicators.atr14 < 0) throw new Error('AI indicator bounds are invalid.');
+  if (input.indicators.relativeVolume !== undefined && (!isFiniteNumber(input.indicators.relativeVolume) || input.indicators.relativeVolume < 0)) throw new Error('AI relative volume is invalid.');
+  if (typeof input.indicators.marketRegime !== 'string' || input.indicators.marketRegime.length > 100) throw new Error('AI market regime is invalid.');
   if (!input.currentMarketConditions || !isFiniteNumber(input.currentMarketConditions.spreadBps) || !isFiniteNumber(input.currentMarketConditions.dataStalenessMs)) throw new Error('AI market-condition telemetry is invalid.');
   if (input.currentMarketConditions.spreadBps < 0 || input.currentMarketConditions.dataStalenessMs < 0) throw new Error('AI market-condition telemetry is out of bounds.');
+  if (input.newsSentiment !== undefined) {
+    if (!input.newsSentiment || typeof input.newsSentiment !== 'object' || !isFiniteNumber(input.newsSentiment.score) || input.newsSentiment.score < -1 || input.newsSentiment.score > 1) throw new Error('AI news sentiment is invalid.');
+    if (typeof input.newsSentiment.headline !== 'string' || input.newsSentiment.headline.length > 1000 || typeof input.newsSentiment.source !== 'string' || input.newsSentiment.source.length > 200) throw new Error('AI news metadata is invalid.');
+    if (!isFiniteNumber(input.newsSentiment.timestamp) || input.newsSentiment.timestamp <= 0) throw new Error('AI news timestamp is invalid.');
+  }
 }
 
 function validateDecision(value: unknown) {
