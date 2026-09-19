@@ -11,6 +11,7 @@ import { AuditLogChain } from '../src/engines/auditEngine';
 import type { OrderRequest } from '../src/types/order';
 import type { BacktestParameters } from '../src/types/backtest';
 import { createOrderLifecycle, transitionOrder } from '../src/engines/orderStateMachine';
+import { PaperExecutionLedger } from '../src/engines/paperExecutionLedger';
 
 function assert(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(`SMOKE TEST FAILED: ${message}`);
@@ -464,6 +465,119 @@ try {
   liveReconciliationBlocked = String(error).includes('LIVE_RECONCILIATION_BLOCKED');
 }
 assert(liveReconciliationBlocked, 'Live broker reconciliation must fail closed without authorization');
+
+
+const partialSnapshot = generateMarketSnapshot('RELIANCE', 100);
+const partialPortfolio = {
+  ...INITIAL_PORTFOLIO_STATE,
+  cash: 1000000,
+  initialCapital: 1000000,
+  equity: 1000000,
+  dayStartEquity: 1000000,
+  peakEquity: 1000000,
+  availableMargin: 1000000,
+  positions: [],
+  positionsCount: 0,
+};
+const partialOrder: OrderRequest = {
+  ...baseOrder,
+  id: 'SMOKE-PARTIAL-100',
+  orderId: 'SMOKE-PARTIAL-100',
+  clientOrderId: 'SMOKE-PARTIAL-CLI',
+  symbol: 'RELIANCE',
+  quantity: 100,
+  estimatedPrice: 100,
+  stopLossPrice: 95,
+  takeProfitPrice: 110,
+};
+const partialLedger = new PaperExecutionLedger();
+const submittedPartial = partialLedger.submitOrder(partialOrder, 'SUBMIT-PARTIAL-1');
+assert(submittedPartial.success && submittedPartial.order?.lifecycle.state === 'ACKNOWLEDGED', 'paper execution ledger submits and acknowledges a new order');
+assert(partialLedger.getReservedCash() === 10000, 'paper execution ledger reserves estimated BUY cash at submission');
+
+const makePartialFill = (fillId: string, quantity: number, price: number): OrderFill => ({
+  fillId,
+  orderId: partialOrder.id,
+  symbol: partialOrder.symbol,
+  side: 'BUY',
+  quantity,
+  price,
+  slippageIncurredBps: 0,
+  slippageBps: 0,
+  brokerFee: 1,
+  brokerageFee: 1,
+  exchangeFee: 0,
+  taxesApplicable: 0,
+  totalCharges: 1,
+  timestamp: Date.now(),
+  brokerOrderId: 'BROKER-PARTIAL-1',
+});
+
+const partial1 = partialLedger.recordFill(partialOrder.id, makePartialFill('FILL-P-30', 30, 100), partialPortfolio, partialSnapshot, 'EVENT-P-30');
+assert(partial1.success && partial1.order?.lifecycle.state === 'PARTIALLY_FILLED' && partial1.order.filledQuantity === 30 && partial1.order.remainingQuantity === 70, 'first 30-unit partial fill updates lifecycle and quantity');
+assert(partialLedger.getReservedCash() === 7000, 'first partial fill releases only the filled BUY reservation');
+const partial2 = partialLedger.recordFill(partialOrder.id, makePartialFill('FILL-P-20', 20, 101), partial1.portfolio!, partialSnapshot, 'EVENT-P-20');
+assert(partial2.success && partial2.order?.lifecycle.state === 'PARTIALLY_FILLED' && partial2.order.filledQuantity === 50 && partial2.order.remainingQuantity === 50, 'second 20-unit partial fill accumulates without closing the order');
+const partial3 = partialLedger.recordFill(partialOrder.id, makePartialFill('FILL-P-50', 50, 102), partial2.portfolio!, partialSnapshot, 'EVENT-P-50');
+assert(partial3.success && partial3.order?.lifecycle.state === 'FILLED' && partial3.order.remainingQuantity === 0, 'final 50-unit fill closes the 100-unit order');
+assert(partialLedger.getReservedCash() === 0, 'fully filled order releases all remaining BUY reservation');
+assert(partial3.portfolio?.positions[0]?.quantity === 100, 'partial fills aggregate into the correct final position quantity');
+assert(Math.abs((partial3.portfolio?.equity ?? 0) - ((partial3.portfolio?.initialCapital ?? 0) + (partial3.portfolio?.totalRealizedPnL ?? 0) + (partial3.portfolio?.totalUnrealizedPnL ?? 0))) < 0.01, 'partial-fill accounting preserves equity/P&L invariant');
+
+const duplicateClient = partialLedger.submitOrder({ ...partialOrder, id: 'SMOKE-PARTIAL-DUP', orderId: 'SMOKE-PARTIAL-DUP' }, 'SUBMIT-DUP-CLIENT');
+assert(!duplicateClient.success && duplicateClient.reason?.includes('client order ID'), 'duplicate clientOrderId is rejected even with a different internal order ID');
+const duplicateFill = partialLedger.recordFill(partialOrder.id, makePartialFill('FILL-P-50', 50, 102), partial3.portfolio!, partialSnapshot, 'EVENT-P-DUP-FILL');
+assert(!duplicateFill.success && duplicateFill.reason?.includes('fill ID'), 'duplicate fillId cannot be applied twice');
+const duplicateEvent = partialLedger.recordFill(partialOrder.id, makePartialFill('FILL-P-NEW', 1, 102), partial3.portfolio!, partialSnapshot, 'EVENT-P-50');
+assert(!duplicateEvent.success && duplicateEvent.reason?.includes('event'), 'duplicate execution event ID is rejected');
+
+const cancelOrder: OrderRequest = { ...partialOrder, id: 'SMOKE-CANCEL-100', orderId: 'SMOKE-CANCEL-100', clientOrderId: 'SMOKE-CANCEL-CLI' };
+const cancelLedger = new PaperExecutionLedger();
+const cancelSubmit = cancelLedger.submitOrder(cancelOrder, 'SUBMIT-CANCEL-1');
+assert(cancelSubmit.success && cancelLedger.getReservedCash() === 10000, 'cancel scenario reserves the unfilled BUY quantity');
+const cancelFill = cancelLedger.recordFill(cancelOrder.id, { ...makePartialFill('FILL-C-30', 30, 100), orderId: cancelOrder.id, brokerOrderId: 'BROKER-CANCEL-1' }, partialPortfolio, partialSnapshot, 'EVENT-C-30');
+assert(cancelFill.success && cancelFill.order?.remainingQuantity === 70, 'cancel scenario accepts the initial 30-unit fill');
+const cancelled = cancelLedger.cancelOrder(cancelOrder.id, 'EVENT-CANCEL');
+assert(cancelled.success && cancelled.order?.lifecycle.state === 'CANCELLED' && cancelled.order.remainingQuantity === 0, 'cancel scenario transitions to CANCELLED and clears remaining quantity');
+assert(cancelLedger.getReservedCash() === 0, 'cancellation releases the remaining BUY reservation');
+const lateFill = cancelLedger.recordFill(cancelOrder.id, { ...makePartialFill('FILL-C-LATE', 10, 101), orderId: cancelOrder.id, brokerOrderId: 'BROKER-CANCEL-1' }, cancelFill.portfolio!, partialSnapshot, 'EVENT-C-LATE');
+assert(!lateFill.success && lateFill.reason?.includes('CANCELLED'), 'late fill after completed cancellation is rejected fail-closed');
+
+const secondOrder: OrderRequest = { ...partialOrder, id: 'SMOKE-BROKER-ID-2', orderId: 'SMOKE-BROKER-ID-2', clientOrderId: 'SMOKE-BROKER-ID-2-CLI' };
+const brokerIdConflict = partialLedger.submitOrder(secondOrder, 'SUBMIT-BROKER-2');
+assert(brokerIdConflict.success, 'second distinct order can be submitted before broker-ID collision is tested');
+const brokerIdFill = partialLedger.recordFill(secondOrder.id, { ...makePartialFill('FILL-BROKER-CONFLICT', 1, 100), orderId: secondOrder.id, brokerOrderId: 'BROKER-PARTIAL-1' }, partial3.portfolio!, partialSnapshot, 'EVENT-BROKER-CONFLICT');
+assert(!brokerIdFill.success && brokerIdFill.reason?.includes('Broker order ID'), 'brokerOrderId cannot be rebound to a different order');
+
+const reconciled = partialLedger.reconcile({
+  orders: [{
+    orderId: partialOrder.id,
+    clientOrderId: partialOrder.clientOrderId,
+    brokerOrderId: 'BROKER-PARTIAL-1',
+    state: 'FILLED',
+    quantity: 100,
+    filledQuantity: 100,
+    averageFillPrice: (30 * 100 + 20 * 101 + 50 * 102) / 100,
+  }],
+  positions: [{ symbol: 'RELIANCE', quantity: 100, averageEntryPrice: partial3.portfolio!.positions[0].averageEntryPrice }],
+  cash: partial3.portfolio!.cash,
+}, partial3.portfolio!);
+assert(reconciled.isReconciled, 'matching local and external order/position/cash state reconciles cleanly');
+
+const mismatched = partialLedger.reconcile({
+  orders: [{
+    orderId: partialOrder.id,
+    clientOrderId: partialOrder.clientOrderId,
+    brokerOrderId: 'BROKER-PARTIAL-1',
+    state: 'FILLED',
+    quantity: 100,
+    filledQuantity: 90,
+    averageFillPrice: 101,
+  }],
+  positions: [{ symbol: 'RELIANCE', quantity: 90, averageEntryPrice: 101 }],
+  cash: partial3.portfolio!.cash + 100,
+}, partial3.portfolio!);
+assert(!mismatched.isReconciled && mismatched.mismatches.length >= 3, 'reconciliation detects order, position, and cash mismatches');
 
 console.log('QUANTPULSE SMOKE TESTS: PASS');
 console.log(JSON.stringify({ bars: bars.length, trades: backtest.trades.length, oosTrades: backtest.outOfSampleMetrics.totalTrades, walkForwardFolds: backtest.walkForwardResults.length }, null, 2));
