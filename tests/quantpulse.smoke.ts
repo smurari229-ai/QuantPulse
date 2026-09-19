@@ -8,7 +8,7 @@ import { evaluateStrategySignal, REGISTERED_STRATEGIES } from '../src/engines/st
 import { calculateEMA, calculateRSI } from '../src/engines/marketAnalysisEngine';
 import { generateAIDecision } from '../src/engines/aiDecisionEngine';
 import { AuditLogChain } from '../src/engines/auditEngine';
-import type { OrderFill, OrderRequest } from '../src/types/order';
+import type { OrderFill, OrderRequest, PortfolioState } from '../src/types/order';
 import type { BacktestParameters } from '../src/types/backtest';
 import { createOrderLifecycle, transitionOrder } from '../src/engines/orderStateMachine';
 import { PaperExecutionLedger } from '../src/engines/paperExecutionLedger';
@@ -545,7 +545,7 @@ assert(!lateFill.success && lateFill.reason?.includes('CANCELLED'), 'late fill a
 const stagedCancelOrder: OrderRequest = { ...partialOrder, id: 'SMOKE-STAGED-CANCEL', orderId: 'SMOKE-STAGED-CANCEL', clientOrderId: 'SMOKE-STAGED-CANCEL-CLI' };
 const stagedCancelLedger = new PaperExecutionLedger();
 assert(stagedCancelLedger.submitOrder(stagedCancelOrder, 'SUBMIT-STAGED').success, 'staged partial-fill cancellation order submits');
-let stagedPortfolio = partialPortfolio;
+let stagedPortfolio: PortfolioState = partialPortfolio;
 for (const [id, qty, price] of [['FILL-S-30', 30, 100], ['FILL-S-20', 20, 101], ['FILL-S-20B', 20, 102]] as const) {
   const staged = stagedCancelLedger.recordFill(stagedCancelOrder.id, { ...makePartialFill(id, qty, price), orderId: stagedCancelOrder.id, brokerOrderId: 'BROKER-STAGED' }, stagedPortfolio, partialSnapshot, `EVENT-${id}`);
   assert(staged.success && staged.portfolio, `staged fill ${id} is applied`);
