@@ -17,6 +17,7 @@ export interface RiskEngineConfig {
 
 export type RiskCheckName =
   | 'ORDER_MARKET_SANITY'
+  | 'SELL_POSITION_AVAILABILITY'
   | 'RISK_CONFIGURATION_SANITY'
   | 'MAX_POSITION_SIZE'
   | 'MAX_POSITION_NOTIONAL'
