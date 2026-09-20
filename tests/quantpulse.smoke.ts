@@ -304,6 +304,8 @@ const reducingSell: OrderRequest = {
 const reducingSellVerdict = evaluateRiskGates(reducingSell, exposurePortfolio, snapshot);
 const exposureGate = reducingSellVerdict.checks.find(c => c.checkName === 'MAX_PORTFOLIO_EXPOSURE');
 assert(exposureGate?.passed, 'selling an existing position reduces projected portfolio exposure instead of adding it');
+const uncoveredSell = evaluateRiskGates({ ...baseOrder, id: 'SMOKE-UNCOVERED-SELL', orderId: 'SMOKE-UNCOVERED-SELL', clientOrderId: 'SMOKE-UNCOVERED-SELL', side: 'SELL', quantity: 25 }, heldPortfolio, riskSafeSnapshot);
+assert(!uncoveredSell.isApproved && uncoveredSell.checks.some(c => c.checkName === 'SELL_POSITION_AVAILABILITY' && !c.passed), 'risk engine rejects a sell order larger than the currently held position');
 assert(Number(String(exposureGate?.currentValue).replace('%', '')) < 56, 'sell exposure projection reflects the exposure reduction');
 
 const killState = triggerEmergencyKillSwitch('smoke-test');
