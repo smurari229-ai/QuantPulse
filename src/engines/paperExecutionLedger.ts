@@ -84,6 +84,7 @@ export class PaperExecutionLedger {
     if (!Number.isFinite(order.quantity) || order.quantity <= 0) return { success: false, reason: 'Order quantity must be positive and finite.' };
     if (order.side !== 'BUY' && order.side !== 'SELL') return { success: false, reason: 'Order side must be BUY or SELL.' };
     if (order.type !== 'MARKET' && order.type !== 'LIMIT' && order.type !== 'STOP_MARKET') return { success: false, reason: 'Unsupported order type.' };
+    if (order.side === 'BUY' && (!Number.isFinite(order.estimatedPrice ?? order.limitPrice) || (order.estimatedPrice ?? order.limitPrice)! <= 0)) return { success: false, reason: 'BUY paper orders require a positive finite reservation price.' };
     if (this.processedEventIds.has(eventId)) return { success: false, reason: 'Duplicate execution event rejected.' };
     if (this.orders.has(order.id)) return { success: false, reason: 'Duplicate order ID rejected.' };
     if (this.clientOrderIds.has(order.clientOrderId)) return { success: false, reason: 'Duplicate client order ID rejected.' };
@@ -107,13 +108,7 @@ export class PaperExecutionLedger {
     this.clientOrderIds.set(order.clientOrderId, order.id);
     if (order.side === 'BUY') {
       const reservationPrice = order.estimatedPrice ?? order.limitPrice;
-      if (!Number.isFinite(reservationPrice) || reservationPrice! <= 0) {
-        this.orders.delete(order.id);
-        this.clientOrderIds.delete(order.clientOrderId);
-        this.processedEventIds.delete(eventId);
-        return { success: false, reason: 'BUY paper orders require a positive finite reservation price.' };
-      }
-      this.reservedCash += reservationPrice * order.quantity;
+      this.reservedCash += reservationPrice! * order.quantity;
     }
     this.processedEventIds.add(eventId);
     GlobalAuditLedger.appendRecord('ORDER_SUBMITTED', 'PAPER_BROKER', { orderId: order.id, clientOrderId: order.clientOrderId, quantity: order.quantity, eventId });
