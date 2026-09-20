@@ -135,6 +135,11 @@ export function evaluateRiskGates(
   const projectedInvested = Math.max(0, currentInvested + exposureDelta);
   const projectedExposurePct = portfolio.equity > 0 ? (projectedInvested / portfolio.equity) * 100 : 100;
 
+  const existingPositionQuantity = existingPosition?.quantity ?? 0;
+  const passedSellAvailability = order.side !== 'SELL' || (existingPosition !== undefined && existingPositionQuantity >= order.quantity);
+  checks.push({ checkName: 'SELL_POSITION_AVAILABILITY' as RiskCheckName, passed: passedSellAvailability, severity: 'CRITICAL_REJECT', currentValue: order.side === 'SELL' ? existingPositionQuantity : 'N/A', thresholdLimit: order.side === 'SELL' ? `>= ${order.quantity}` : 'N/A', reason: passedSellAvailability ? 'Sell quantity is fully covered by the existing paper position.' : `Sell order requests ${order.quantity} units but only ${existingPositionQuantity} units are held.` });
+  if (!passedSellAvailability) rejectionReasons.push('Sell quantity exceeds the currently held position.');
+
   const validQuantity = Number.isFinite(order.quantity) && order.quantity > 0;
   const validReferencePrice = Number.isFinite(referencePrice) && referencePrice > 0;
   const validMarketPrices = marketSnapshot.symbol === order.symbol
