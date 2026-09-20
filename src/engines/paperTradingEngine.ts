@@ -3,6 +3,7 @@ import { MarketDataSnapshot } from '../types/market';
 import { evaluateRiskGates, DEFAULT_RISK_CONFIG, RecentOrderContext } from './riskEngine';
 import { RiskEngineConfig } from '../types/risk';
 import { applyPaperFill } from './paperFillEngine';
+import { GlobalAuditLedger } from './auditEngine';
 
 export interface PaperSimulationResult {
   order: OrderRequest;
@@ -48,7 +49,10 @@ export function executePaperOrder(order: OrderRequest, currentPortfolio: Portfol
   if (marketSnapshot.dataQuality.isValidated !== true || marketSnapshot.dataQuality.isStale) return reject(order, currentPortfolio, 'Market snapshot is not validated or is stale.');
   if (!Number.isFinite(marketSnapshot.lastPrice) || marketSnapshot.lastPrice <= 0 || !Number.isFinite(marketSnapshot.bid) || marketSnapshot.bid <= 0 || !Number.isFinite(marketSnapshot.ask) || marketSnapshot.ask <= 0 || marketSnapshot.ask < marketSnapshot.bid) return reject(order, currentPortfolio, 'Invalid market bid/ask/last-price data.');
   const riskVerdict = evaluateRiskGates(order, currentPortfolio, marketSnapshot, options?.riskContext, options?.riskConfig ?? DEFAULT_RISK_CONFIG);
-  if (!riskVerdict.isApproved) return reject(order, currentPortfolio, `Paper order rejected by deterministic risk engine: ${riskVerdict.rejectionReasons.join(' | ')}`);
+  if (!riskVerdict.isApproved) {
+    GlobalAuditLedger.appendRecord('RISK_GATE_REJECTED', 'RISK_ENGINE', { orderId: order.id, symbol: order.symbol, reasons: riskVerdict.rejectionReasons });
+    return reject(order, currentPortfolio, `Paper order rejected by deterministic risk engine: ${riskVerdict.rejectionReasons.join(' | ')}`);
+  }
   if (!Number.isFinite(currentPortfolio.cash) || !Number.isFinite(currentPortfolio.equity) || currentPortfolio.cash < 0 || currentPortfolio.equity <= 0) return reject(order, currentPortfolio, 'Current paper portfolio state is invalid.');
   const now = Date.now();
   const sameTradingDay = Number.isFinite(currentPortfolio.dayStartTimestamp) && isSameLocalCalendarDay(currentPortfolio.dayStartTimestamp, now);
@@ -108,5 +112,6 @@ export function executePaperOrder(order: OrderRequest, currentPortfolio: Portfol
 }
 
 function reject(order: OrderRequest, portfolio: PortfolioState, rejectionReason: string): PaperSimulationResult {
+  GlobalAuditLedger.appendRecord('ORDER_REJECTED', 'PAPER_BROKER', { orderId: order.id, symbol: order.symbol, reason: rejectionReason });
   return { order, updatedPortfolio: portfolio, slippageIncurredBps: 0, totalCharges: 0, status: 'REJECTED', rejectionReason };
 }
