@@ -19,6 +19,12 @@ function fillFor(targetOrder: OrderRequest, fillId: string, quantity: number, pr
   return { fillId, orderId: targetOrder.id, symbol: targetOrder.symbol, side: targetOrder.side, quantity, price, slippageIncurredBps: 0, slippageBps: 0, brokerFee: 1, brokerageFee: 1, exchangeFee: 0, taxesApplicable: 0, totalCharges: 1, timestamp: Date.now(), brokerOrderId };
 }
 
+const boundaryLedger = new PaperExecutionLedger();
+const liveModeAttempt = boundaryLedger.submitOrder({ ...order, id: 'LIVE-BOUNDARY-1', orderId: 'LIVE-BOUNDARY-1', clientOrderId: 'LIVE-BOUNDARY-CLIENT', executionMode: 'LIVE_BLOCKED' }, 'LIVE-BOUNDARY-EVENT');
+assert(!liveModeAttempt.success && liveModeAttempt.reason?.includes('PAPER orders only'), 'paper execution ledger rejects non-PAPER execution mode at its own boundary');
+const unpricedBuyAttempt = boundaryLedger.submitOrder({ ...order, id: 'UNPRICED-BUY-1', orderId: 'UNPRICED-BUY-1', clientOrderId: 'UNPRICED-BUY-CLIENT', estimatedPrice: undefined, limitPrice: undefined }, 'UNPRICED-BUY-EVENT');
+assert(!unpricedBuyAttempt.success && unpricedBuyAttempt.reason?.includes('reservation price'), 'paper ledger rejects unpriced BUY orders instead of creating an unreserved execution state');
+
 const ledger = new PaperExecutionLedger();
 assert(ledger.submitOrder(order, 'SUBMIT-1').success, 'order submits');
 assert(ledger.acknowledgeOrder(order.id, 'ACK-1').success, 'order acknowledges');
