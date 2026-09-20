@@ -13,8 +13,7 @@ export const INITIAL_TEST_CASES: TestCaseItem[] = [
     status: 'PASS',
     evidencePath: 'tests/quantpulse.smoke.ts',
     lastExecutedTimestamp: undefined,
-    assertionMessage: 'Executable assertion: calculateEMA fixture is verified in tests/quantpulse.smoke.ts.'
-    evidencePath: 'tests/quantpulse.smoke.ts',
+    assertionMessage: 'Executable assertion: calculateEMA fixture is verified in tests/quantpulse.smoke.ts.',
   },
   {
     id: 'TC-UNIT-02',
@@ -27,8 +26,7 @@ export const INITIAL_TEST_CASES: TestCaseItem[] = [
     status: 'PASS',
     evidencePath: 'tests/quantpulse.smoke.ts',
     lastExecutedTimestamp: undefined,
-    assertionMessage: 'Executable assertion: calculateRSI output is verified as finite and bounded in tests/quantpulse.smoke.ts.'
-    evidencePath: 'tests/quantpulse.smoke.ts',
+    assertionMessage: 'Executable assertion: calculateRSI output is verified as finite and bounded in tests/quantpulse.smoke.ts.',
   },
 
   // 2. STRATEGY TESTS
