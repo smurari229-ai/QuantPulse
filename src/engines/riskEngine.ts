@@ -2,6 +2,7 @@ import {
   RiskEngineConfig,
   RiskValidationVerdict,
   IndividualRiskCheckResult,
+  RiskCheckName,
 } from '../types/risk';
 import { OrderRequest, PortfolioState } from '../types/order';
 import { MarketDataSnapshot } from '../types/market';
