@@ -28,6 +28,7 @@ export interface ReconciliationOrderSnapshot {
   quantity: number;
   filledQuantity: number;
   averageFillPrice?: number;
+  remainingQuantity: number;
 }
 
 export interface ReconciliationPositionSnapshot {
@@ -42,6 +43,7 @@ export interface PaperReconciliationSnapshot {
   orders: ReconciliationOrderSnapshot[];
   positions: ReconciliationPositionSnapshot[];
   cash: number;
+  reservedCash?: number;
 }
 
 export interface ReconciliationMismatch {
@@ -87,12 +89,10 @@ export class PaperExecutionLedger {
     if (!first.success) return { success: false, reason: first.reason };
     const second = transitionOrder(first.lifecycle, 'SUBMITTED', `${eventId}:SUBMITTED`, timestamp);
     if (!second.success) return { success: false, reason: second.reason };
-    const third = transitionOrder(second.lifecycle, 'ACKNOWLEDGED', `${eventId}:ACKNOWLEDGED`, timestamp);
-    if (!third.success) return { success: false, reason: third.reason };
 
     const execution: PaperExecutionOrder = {
       order,
-      lifecycle: third.lifecycle,
+      lifecycle: second.lifecycle,
       filledQuantity: 0,
       remainingQuantity: order.quantity,
       fills: [],
@@ -107,6 +107,19 @@ export class PaperExecutionLedger {
     }
     this.processedEventIds.add(eventId);
     GlobalAuditLedger.appendRecord('ORDER_SUBMITTED', 'PAPER_BROKER', { orderId: order.id, clientOrderId: order.clientOrderId, quantity: order.quantity, eventId });
+    return { success: true, order: execution };
+  }
+
+  public acknowledgeOrder(orderId: string, eventId: string, timestamp = Date.now()): PaperExecutionEventResult {
+    if (!eventId.trim()) return { success: false, reason: 'Event ID is required.' };
+    if (this.processedEventIds.has(eventId)) return { success: false, reason: 'Duplicate execution event rejected.' };
+    const execution = this.orders.get(orderId);
+    if (!execution) return { success: false, reason: 'Unknown order rejected.' };
+    const acknowledged = transitionOrder(execution.lifecycle, 'ACKNOWLEDGED', eventId, timestamp);
+    if (!acknowledged.success) return { success: false, reason: acknowledged.reason };
+    execution.lifecycle = acknowledged.lifecycle;
+    this.processedEventIds.add(eventId);
+    GlobalAuditLedger.appendRecord('ORDER_ACKNOWLEDGED', 'PAPER_BROKER', { orderId, clientOrderId: execution.order.clientOrderId, eventId });
     return { success: true, order: execution };
   }
 
@@ -238,7 +251,9 @@ export class PaperExecutionLedger {
         ['state', local.lifecycle.state, remote.state, 'Order lifecycle state mismatch.'],
         ['quantity', local.order.quantity, remote.quantity, 'Order quantity mismatch.'],
         ['filledQuantity', local.filledQuantity, remote.filledQuantity, 'Filled quantity mismatch.'],
+        ['clientOrderId', local.order.clientOrderId, remote.clientOrderId, 'Client order ID mismatch.'],
         ['brokerOrderId', local.brokerOrderId, remote.brokerOrderId, 'Broker order ID mismatch.'],
+        ['remainingQuantity', local.remainingQuantity, remote.remainingQuantity, 'Remaining quantity mismatch.'],
         ['averageFillPrice', localAverage, remote.averageFillPrice, 'Average fill price mismatch.'],
       ];
       for (const [key, localValue, externalValue, reason] of checks) {
@@ -265,6 +280,10 @@ export class PaperExecutionLedger {
       if (!localPositions.has(remote.symbol)) {
         mismatches.push({ category: 'POSITION', key: remote.symbol, localValue: 'MISSING', externalValue: remote, reason: 'External position is unknown to local state.' });
       }
+    }
+
+    if (external.reservedCash !== undefined && (!Number.isFinite(external.reservedCash) || Math.abs(this.reservedCash - external.reservedCash) > 0.01)) {
+      mismatches.push({ category: 'CASH', key: 'reservedCash', localValue: this.reservedCash, externalValue: external.reservedCash, reason: 'Reserved cash mismatch.' });
     }
 
     if (!Number.isFinite(external.cash) || Math.abs(portfolio.cash - external.cash) > 0.01) {
