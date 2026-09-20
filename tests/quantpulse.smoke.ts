@@ -2,7 +2,7 @@ import { BLOCKED_LIVE_BROKER_ADAPTER } from '../src/engines/liveBrokerAdapter';
 import { generateSyntheticDailyBars, generateMarketSnapshot, getLiveSnapshot, validateMarketDataSeries } from '../src/engines/marketDataEngine';
 import { evaluateRiskGates, DEFAULT_RISK_CONFIG } from '../src/engines/riskEngine';
 import { INITIAL_PORTFOLIO_STATE, executePaperOrder } from '../src/engines/paperTradingEngine';
-import { INITIAL_KILL_SWITCH_STATE, triggerEmergencyKillSwitch, resetKillSwitchWithVerification } from '../src/engines/killSwitchEngine';
+import { INITIAL_KILL_SWITCH_STATE, triggerEmergencyKillSwitch, resetKillSwitchWithVerification, canSubmitOrders } from '../src/engines/killSwitchEngine';
 import { runFullBacktest } from '../src/engines/backtestingLab';
 import { evaluateStrategySignal, REGISTERED_STRATEGIES } from '../src/engines/strategyEngine';
 import { calculateEMA, calculateRSI } from '../src/engines/marketAnalysisEngine';
