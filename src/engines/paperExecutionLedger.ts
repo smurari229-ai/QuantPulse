@@ -97,6 +97,7 @@ export class PaperExecutionLedger {
       remainingQuantity: order.quantity,
       fills: [],
     };
+    GlobalAuditLedger.appendRecord('ORDER_VALIDATED', 'PAPER_BROKER', { orderId: order.id, clientOrderId: order.clientOrderId, quantity: order.quantity, eventId });
     this.orders.set(order.id, execution);
     this.clientOrderIds.set(order.clientOrderId, order.id);
     if (order.side === 'BUY') {
@@ -209,6 +210,7 @@ export class PaperExecutionLedger {
     }
     execution.remainingQuantity = 0;
     this.processedEventIds.add(eventId);
+    GlobalAuditLedger.appendRecord('ORDER_CANCEL_REQUESTED', 'PAPER_BROKER', { orderId, clientOrderId: execution.order.clientOrderId, eventId });
     GlobalAuditLedger.appendRecord('ORDER_CANCELLED', 'PAPER_BROKER', { orderId, clientOrderId: execution.order.clientOrderId, filledQuantity: execution.filledQuantity, eventId });
     return { success: true, order: execution };
   }
