@@ -151,7 +151,7 @@ export function evaluateRiskGates(
   if (!passedKillSwitch) rejectionReasons.push('Emergency Kill Switch is currently engaged.');
 
   const passedMaxNotional = projectedPositionNotional <= config.maxPositionSizeNotional;
-  checks.push({ checkName: 'MAX_POSITION_NOTIONAL', passed: passedMaxNotional, severity: 'CRITICAL_REJECT', currentValue: `$${Math.round(notional).toLocaleString()}`, thresholdLimit: `$${config.maxPositionSizeNotional.toLocaleString()}`, reason: passedMaxNotional ? 'Projected position notional is within the individual position limit.' : `Projected position notional (${Math.round(projectedPositionNotional).toLocaleString()}) exceeds maximum permitted (${config.maxPositionSizeNotional.toLocaleString()}).` });
+  checks.push({ checkName: 'MAX_POSITION_NOTIONAL', passed: passedMaxNotional, severity: 'CRITICAL_REJECT', currentValue: `${Math.round(projectedPositionNotional).toLocaleString()}`, thresholdLimit: `$${config.maxPositionSizeNotional.toLocaleString()}`, reason: passedMaxNotional ? 'Projected position notional is within the individual position limit.' : `Projected position notional (${Math.round(projectedPositionNotional).toLocaleString()}) exceeds maximum permitted (${config.maxPositionSizeNotional.toLocaleString()}).` });
   if (!passedMaxNotional) rejectionReasons.push(`Position size exceeds $${config.maxPositionSizeNotional.toLocaleString()}`);
 
   const passedMaxPositionPct = positionPct <= config.maxPositionPctOfPortfolio;
