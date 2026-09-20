@@ -21,6 +21,9 @@ function fillFor(targetOrder: OrderRequest, fillId: string, quantity: number, pr
 
 const ledger = new PaperExecutionLedger();
 assert(ledger.submitOrder(order, 'SUBMIT-1').success, 'order submits');
+assert(ledger.acknowledgeOrder(order.id, 'ACK-1').success, 'order acknowledges');
+const duplicateAck = ledger.acknowledgeOrder(order.id, 'ACK-1-DUP');
+assert(!duplicateAck.success, 'second acknowledgement cannot transition an already acknowledged order');
 assert(ledger.getReservedCash() === 10_000, 'BUY cash is reserved');
 const first = ledger.recordFill(order.id, fillFor(order, 'FILL-30', 30, 100, 'BROKER-1'), portfolio, snapshot, 'EVENT-30');
 assert(first.success && first.order?.lifecycle.state === 'PARTIALLY_FILLED' && first.order.filledQuantity === 30, '30-unit partial fill applies');
@@ -42,6 +45,7 @@ assert(!duplicateEvent.success && duplicateEvent.reason?.includes('event'), 'dup
 const cancelLedger = new PaperExecutionLedger();
 const cancelOrder: OrderRequest = { ...order, id: 'CANCEL-100', orderId: 'CANCEL-100', clientOrderId: 'CANCEL-CLIENT' };
 assert(cancelLedger.submitOrder(cancelOrder, 'SUBMIT-CANCEL').success, 'cancel order submits');
+assert(cancelLedger.acknowledgeOrder(cancelOrder.id, 'ACK-CANCEL').success, 'cancel order acknowledges');
 let cancelPortfolio: PortfolioState = portfolio;
 for (const [id, quantity, price] of [['C-30', 30, 100], ['C-20', 20, 101], ['C-20B', 20, 102]] as const) {
   const result = cancelLedger.recordFill(cancelOrder.id, fillFor(cancelOrder, id, quantity, price, 'BROKER-CANCEL'), cancelPortfolio, snapshot, `EVENT-${id}`);
@@ -58,6 +62,7 @@ const brokerLedger = new PaperExecutionLedger();
 const brokerA: OrderRequest = { ...order, id: 'BROKER-A', orderId: 'BROKER-A', clientOrderId: 'BROKER-A-CLIENT', quantity: 1 };
 const brokerB: OrderRequest = { ...order, id: 'BROKER-B', orderId: 'BROKER-B', clientOrderId: 'BROKER-B-CLIENT', quantity: 1 };
 assert(brokerLedger.submitOrder(brokerA, 'SUBMIT-A').success && brokerLedger.submitOrder(brokerB, 'SUBMIT-B').success, 'two broker-ID test orders submit');
+assert(brokerLedger.acknowledgeOrder(brokerA.id, 'ACK-A').success && brokerLedger.acknowledgeOrder(brokerB.id, 'ACK-B').success, 'broker-ID test orders acknowledge');
 assert(brokerLedger.recordFill(brokerA.id, fillFor(brokerA, 'BROKER-FILL-A', 1, 100, 'BROKER-SHARED'), portfolio, snapshot, 'FILL-A').success, 'first broker ID binds');
 const brokerCollision = brokerLedger.recordFill(brokerB.id, fillFor(brokerB, 'BROKER-FILL-B', 1, 100, 'BROKER-SHARED'), portfolio, snapshot, 'FILL-B');
 assert(!brokerCollision.success && brokerCollision.reason?.includes('already bound'), 'brokerOrderId cannot bind to another order');
@@ -65,11 +70,12 @@ assert(!brokerCollision.success && brokerCollision.reason?.includes('already bou
 const reconLedger = new PaperExecutionLedger();
 const reconOrder: OrderRequest = { ...order, id: 'RECON-1', orderId: 'RECON-1', clientOrderId: 'RECON-CLIENT', quantity: 10 };
 assert(reconLedger.submitOrder(reconOrder, 'RECON-SUBMIT').success, 'reconciliation order submits');
+assert(reconLedger.acknowledgeOrder(reconOrder.id, 'RECON-ACK').success, 'reconciliation order acknowledges');
 const reconFill = reconLedger.recordFill(reconOrder.id, fillFor(reconOrder, 'RECON-FILL', 10, 100, 'RECON-BROKER'), portfolio, snapshot, 'RECON-FILL-EVENT');
 assert(reconFill.success && reconFill.portfolio, 'reconciliation order fills');
-const matching = reconLedger.reconcile({ timestamp: Date.now(), maxAgeMs: 5000, orders: [{ orderId: reconOrder.id, clientOrderId: reconOrder.clientOrderId, brokerOrderId: 'RECON-BROKER', state: 'FILLED', quantity: 10, filledQuantity: 10, averageFillPrice: 100 }], positions: [{ symbol: 'RELIANCE', quantity: 10, averageEntryPrice: 100 }], cash: reconFill.portfolio.cash }, reconFill.portfolio);
+const matching = reconLedger.reconcile({ timestamp: Date.now(), maxAgeMs: 5000, orders: [{ orderId: reconOrder.id, clientOrderId: reconOrder.clientOrderId, brokerOrderId: 'RECON-BROKER', state: 'FILLED', quantity: 10, filledQuantity: 10, averageFillPrice: 100, remainingQuantity: 0 }], positions: [{ symbol: 'RELIANCE', quantity: 10, averageEntryPrice: 100 }], cash: reconFill.portfolio.cash, reservedCash: reconLedger.getReservedCash() }, reconFill.portfolio);
 assert(matching.isReconciled && matching.mismatches.length === 0, 'matching reconciliation passes');
-const mismatch = reconLedger.reconcile({ timestamp: Date.now(), maxAgeMs: 5000, orders: [{ orderId: reconOrder.id, clientOrderId: reconOrder.clientOrderId, brokerOrderId: 'RECON-BROKER', state: 'FILLED', quantity: 10, filledQuantity: 9, averageFillPrice: 99 }], positions: [{ symbol: 'RELIANCE', quantity: 9, averageEntryPrice: 99 }], cash: reconFill.portfolio.cash + 1 }, reconFill.portfolio);
+const mismatch = reconLedger.reconcile({ timestamp: Date.now(), maxAgeMs: 5000, orders: [{ orderId: reconOrder.id, clientOrderId: reconOrder.clientOrderId, brokerOrderId: 'RECON-BROKER', state: 'FILLED', quantity: 10, filledQuantity: 9, averageFillPrice: 99, remainingQuantity: 1 }], positions: [{ symbol: 'RELIANCE', quantity: 9, averageEntryPrice: 99 }], cash: reconFill.portfolio.cash + 1, reservedCash: reconLedger.getReservedCash() + 1 }, reconFill.portfolio);
 assert(!mismatch.isReconciled && mismatch.mismatches.length >= 3, 'reconciliation detects order/position/cash mismatches');
 const stale = reconLedger.reconcile({ timestamp: Date.now() - 10_000, maxAgeMs: 5000, orders: [], positions: [], cash: reconFill.portfolio.cash }, reconFill.portfolio);
 assert(!stale.isReconciled && stale.mismatches.some((m) => m.key === 'reconciliation-timestamp'), 'stale reconciliation rejects');
