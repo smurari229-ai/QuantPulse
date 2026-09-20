@@ -62,6 +62,12 @@ export const PaperTradingView: React.FC<PaperTradingViewProps> = ({ portfolio, r
       setIsSubmitting(false);
       return;
     }
+    const acknowledged = ledger.acknowledgeOrder(proposedOrder.id, `ACK:${id}`);
+    if (!acknowledged.success) {
+      setExecutionLog(prev => [`[${new Date().toLocaleTimeString()}] ACK REJECTED: ${acknowledged.reason || 'Order acknowledgement failed'}`, ...prev]);
+      setIsSubmitting(false);
+      return;
+    }
     setTimeout(() => {
       const result = executePaperOrder(proposedOrder, portfolio, marketSnapshot, { isExecutionHalted: killSwitchRef.current, riskConfig, riskContext });
       if (result.status === 'FILLED' && result.fill) {
