@@ -26,26 +26,26 @@ export const Header: React.FC<HeaderProps> = ({
   const isEmergency = killSwitchState.isEmergencyStopTripped || killSwitchState.isGlobalTradingOff;
 
   return (
-    <header id="platform-main-header" className="bg-slate-900 border-b border-slate-800 text-slate-100 px-3 sm:px-4 py-2.5 flex flex-wrap items-center justify-between gap-3 sticky top-0 z-40 shadow-sm">
+    <header id="platform-main-header" className="bg-slate-900 border-b border-slate-800 text-slate-100 px-4 py-2.5 flex items-center justify-between sticky top-0 z-40 shadow-sm">
       {/* Brand & Mode */}
-      <div className="flex min-w-0 flex-1 flex-wrap items-center gap-3">
-        <div className="flex min-w-0 items-center space-x-2">
-          <div className="w-8 h-8 shrink-0 rounded bg-gradient-to-br from-indigo-600 to-blue-700 flex items-center justify-center font-bold text-white tracking-wider shadow-inner text-sm">
+      <div className="flex items-center space-x-3">
+        <div className="flex items-center space-x-2">
+          <div className="w-8 h-8 rounded bg-gradient-to-br from-indigo-600 to-blue-700 flex items-center justify-center font-bold text-white tracking-wider shadow-inner text-sm">
             QP
           </div>
-          <div className="min-w-0">
-            <div className="flex min-w-0 items-center space-x-2">
-              <span className="font-semibold text-slate-100 tracking-tight text-base shrink-0">QuantPulse</span>
-              <span className="text-[10px] font-mono uppercase bg-slate-800 text-slate-400 px-1.5 py-0.5 rounded border border-slate-700 whitespace-nowrap">
+          <div>
+            <div className="flex items-center space-x-2">
+              <span className="font-semibold text-slate-100 tracking-tight text-base">QuantPulse</span>
+              <span className="text-[10px] font-mono uppercase bg-slate-800 text-slate-400 px-1.5 py-0.5 rounded border border-slate-700">
                 Institutional AI Engine
               </span>
             </div>
-            <p className="text-[11px] text-slate-400 font-medium truncate">Algorithmic Risk & Execution Architecture</p>
+            <p className="text-[11px] text-slate-400 font-medium">Algorithmic Risk & Execution Architecture</p>
           </div>
         </div>
 
         {/* Execution Mode Badge - CRITICAL: Paper vs Live Differentiation */}
-        <div className="ml-0 lg:ml-1 pl-0 lg:pl-3 border-l-0 lg:border-l border-slate-800 flex items-center shrink-0">
+        <div className="ml-4 pl-4 border-l border-slate-800 flex items-center">
           {executionMode === 'PAPER' ? (
             <div
               id="badge-paper-mode"
@@ -98,17 +98,17 @@ export const Header: React.FC<HeaderProps> = ({
       </div>
 
       {/* Emergency Kill Switch Button */}
-      <div className="flex items-center space-x-3 shrink-0">
+      <div className="flex items-center space-x-3">
         {isEmergency ? (
           <div className="flex items-center space-x-2 bg-rose-950/80 border border-rose-600 px-3 py-1.5 rounded text-rose-200 text-xs font-mono animate-pulse">
             <AlertTriangle className="w-4 h-4 text-rose-400" />
-            <span className="font-bold whitespace-nowrap">SYSTEM HALTED BY KILL SWITCH</span>
+            <span className="font-bold">SYSTEM HALTED BY KILL SWITCH</span>
           </div>
         ) : (
           <button
             id="btn-emergency-kill-switch-header"
             onClick={onTriggerKillSwitch}
-            className="flex items-center space-x-1.5 bg-rose-600 hover:bg-rose-700 active:bg-rose-800 text-white px-3 py-1.5 rounded text-xs font-semibold tracking-wider transition-colors shadow-sm focus:outline-none focus:ring-2 focus:ring-rose-500 whitespace-nowrap"
+            className="flex items-center space-x-1.5 bg-rose-600 hover:bg-rose-700 active:bg-rose-800 text-white px-3 py-1.5 rounded text-xs font-semibold tracking-wider transition-colors shadow-sm focus:outline-none focus:ring-2 focus:ring-rose-500"
             title="Immediately halt all order execution and freeze active strategies."
           >
             <ShieldAlert className="w-4 h-4" />

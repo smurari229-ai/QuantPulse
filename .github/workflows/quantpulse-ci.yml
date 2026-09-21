@@ -2,7 +2,7 @@ name: QuantPulse CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, deep-audit-phase1-2026-09-19]
   pull_request:
     branches: [main]
 
@@ -20,6 +20,8 @@ jobs:
         run: npm install
       - name: TypeScript check
         run: npm run lint
+      - name: Runtime dependency audit
+        run: npm audit --omit=dev --audit-level=high
       - name: Engine smoke tests
         run: npm test
       - name: Production build

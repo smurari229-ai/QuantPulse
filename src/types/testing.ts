@@ -28,6 +28,7 @@ export interface TestCaseItem {
   status: TestStatus;
   lastExecutedTimestamp?: number;
   assertionMessage?: string;
+  evidencePath?: string;
   blockingReason?: string;
 }
 

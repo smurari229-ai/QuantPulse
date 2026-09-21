@@ -4,6 +4,7 @@ import { MarketDataSnapshot } from '../../types/market';
 import { RiskEngineConfig } from '../../types/risk';
 import { executePaperOrder } from '../../engines/paperTradingEngine';
 import { evaluateRiskGates, RecentOrderContext } from '../../engines/riskEngine';
+import { PaperExecutionLedger } from '../../engines/paperExecutionLedger';
 import { ClipboardList, ShieldAlert, ArrowRight, RefreshCw } from 'lucide-react';
 
 interface PaperTradingViewProps {
@@ -25,6 +26,8 @@ export const PaperTradingView: React.FC<PaperTradingViewProps> = ({ portfolio, r
   const [stopLossPrice, setStopLossPrice] = useState(Number((marketSnapshot.lastPrice * 0.96).toFixed(2)));
   const [takeProfitPrice, setTakeProfitPrice] = useState(Number((marketSnapshot.lastPrice * 1.08).toFixed(2)));
   const [executionLog, setExecutionLog] = useState<string[]>([]);
+  const executionLedgerRef = useRef<PaperExecutionLedger | null>(null);
+  if (!executionLedgerRef.current) executionLedgerRef.current = new PaperExecutionLedger();
 
   useEffect(() => {
     setLimitPrice(Number(marketSnapshot.lastPrice.toFixed(2)));
@@ -52,12 +55,33 @@ export const PaperTradingView: React.FC<PaperTradingViewProps> = ({ portfolio, r
     const verdict = evaluateRiskGates(proposedOrder, portfolio, marketSnapshot, { ...riskContext, isEmergencyKillSwitchActive }, riskConfig);
     onRiskVerdictGenerated(verdict);
     if (!verdict.isApproved) { setExecutionLog(prev => [`[${new Date().toLocaleTimeString()}] REJECTED by Risk Engine: ${verdict.rejectionReasons.join('; ')}`, ...prev]); setIsSubmitting(false); return; }
+    const ledger = executionLedgerRef.current!;
+    const submitted = ledger.submitOrder(proposedOrder, `SUBMIT:${id}`);
+    if (!submitted.success) {
+      setExecutionLog(prev => [`[${new Date().toLocaleTimeString()}] EXECUTION STATE REJECTED: ${submitted.reason || 'Order could not enter execution ledger'}`, ...prev]);
+      setIsSubmitting(false);
+      return;
+    }
+    const acknowledged = ledger.acknowledgeOrder(proposedOrder.id, `ACK:${id}`);
+    if (!acknowledged.success) {
+      setExecutionLog(prev => [`[${new Date().toLocaleTimeString()}] ACK REJECTED: ${acknowledged.reason || 'Order acknowledgement failed'}`, ...prev]);
+      setIsSubmitting(false);
+      return;
+    }
     setTimeout(() => {
       const result = executePaperOrder(proposedOrder, portfolio, marketSnapshot, { isExecutionHalted: killSwitchRef.current, riskConfig, riskContext });
       if (result.status === 'FILLED' && result.fill) {
-        setExecutionLog(prev => [`[${new Date().toLocaleTimeString()}] FILLED: ${side} ${quantity} ${symbol} @ $${result.fill!.price.toFixed(2)} (Slippage: ${result.fill!.slippageIncurredBps} bps, Fees: $${result.totalCharges.toFixed(2)}) - Token: ${verdict.auditableRiskToken.slice(0, 10)}...`, ...prev]);
-        onOrderExecuted(result.updatedPortfolio, proposedOrder);
-      } else setExecutionLog(prev => [`[${new Date().toLocaleTimeString()}] EXECUTION FAILED: ${result.rejectionReason || 'Unknown paper execution rejection'}`, ...prev]);
+        const applied = ledger.recordFill(proposedOrder.id, result.fill, portfolio, marketSnapshot, `FILL:${result.fill.fillId}`);
+        if (applied.success && applied.portfolio) {
+          setExecutionLog(prev => [`[${new Date().toLocaleTimeString()}] FILLED: ${side} ${quantity} ${symbol} @ ${result.fill!.price.toFixed(2)} (Slippage: ${result.fill!.slippageIncurredBps} bps, Fees: ${result.totalCharges.toFixed(2)}) - Token: ${verdict.auditableRiskToken.slice(0, 10)}...`, ...prev]);
+          onOrderExecuted(applied.portfolio, proposedOrder);
+        } else {
+          setExecutionLog(prev => [`[${new Date().toLocaleTimeString()}] EXECUTION LEDGER REJECTED FILL: ${applied.reason || 'Unknown ledger rejection'}`, ...prev]);
+        }
+      } else {
+        ledger.cancelOrder(proposedOrder.id, `CANCEL:${id}`);
+        setExecutionLog(prev => [`[${new Date().toLocaleTimeString()}] EXECUTION FAILED: ${result.rejectionReason || 'Unknown paper execution rejection'}`, ...prev]);
+      }
       setIsSubmitting(false);
     }, 350);
   };
