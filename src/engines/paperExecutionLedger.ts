@@ -151,6 +151,27 @@ export class PaperExecutionLedger {
     if (execution.brokerOrderId && fill.brokerOrderId !== execution.brokerOrderId) {
       return { success: false, reason: 'Broker order ID changed for an existing order.' };
     }
+    if (fill.orderId !== execution.order.id && fill.orderId !== execution.order.orderId) {
+      return { success: false, reason: 'Fill order ID does not match the submitted order.' };
+    }
+    if (fill.symbol !== execution.order.symbol || fill.side !== execution.order.side) {
+      return { success: false, reason: 'Fill symbol/side does not match the submitted order.' };
+    }
+    if (!fill.brokerOrderId.trim()) {
+      return { success: false, reason: 'Broker order ID is required for a paper fill.' };
+    }
+    if (!Number.isFinite(fill.price) || fill.price <= 0) {
+      return { success: false, reason: 'Fill price must be positive and finite.' };
+    }
+    if (!Number.isFinite(fill.totalCharges) || fill.totalCharges < 0) {
+      return { success: false, reason: 'Fill charges must be finite and non-negative.' };
+    }
+    if (!Number.isFinite(fill.timestamp) || fill.timestamp <= 0) {
+      return { success: false, reason: 'Fill timestamp must be positive and finite.' };
+    }
+    if (!Number.isFinite(fill.slippageIncurredBps) || fill.slippageIncurredBps < 0) {
+      return { success: false, reason: 'Fill slippage must be finite and non-negative.' };
+    }
     if (!Number.isFinite(fill.quantity) || fill.quantity <= 0 || fill.quantity > execution.remainingQuantity) {
       return { success: false, reason: 'Fill quantity exceeds the remaining order quantity or is invalid.' };
     }
