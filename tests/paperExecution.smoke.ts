@@ -33,6 +33,12 @@ assert(!duplicateAck.success, 'second acknowledgement cannot transition an alrea
 assert(ledger.getReservedCash() === 10_000, 'BUY cash is reserved');
 const first = ledger.recordFill(order.id, fillFor(order, 'FILL-30', 30, 100, 'BROKER-1'), portfolio, snapshot, 'EVENT-30');
 assert(first.success && first.order?.lifecycle.state === 'PARTIALLY_FILLED' && first.order.filledQuantity === 30, '30-unit partial fill applies');
+const mismatchedFill = ledger.recordFill(order.id, { ...fillFor(order, 'FILL-MISMATCH', 1, 100, 'BROKER-1'), symbol: 'NIFTY50' }, portfolio, snapshot, 'EVENT-MISMATCH');
+assert(!mismatchedFill.success && mismatchedFill.reason?.includes('symbol/side'), 'paper ledger rejects a fill for the wrong symbol or side before portfolio mutation');
+const invalidFillPrice = ledger.recordFill(order.id, { ...fillFor(order, 'FILL-BAD-PRICE', 1, 0, 'BROKER-1') }, portfolio, snapshot, 'EVENT-BAD-PRICE');
+assert(!invalidFillPrice.success && invalidFillPrice.reason?.includes('price'), 'paper ledger rejects non-positive fill prices');
+const invalidFillTimestamp = ledger.recordFill(order.id, { ...fillFor(order, 'FILL-BAD-TIME', 1, 100, 'BROKER-1'), timestamp: Number.NaN }, portfolio, snapshot, 'EVENT-BAD-TIME');
+assert(!invalidFillTimestamp.success && invalidFillTimestamp.reason?.includes('timestamp'), 'paper ledger rejects invalid fill timestamps');
 const second = ledger.recordFill(order.id, fillFor(order, 'FILL-20', 20, 101, 'BROKER-1'), first.portfolio!, snapshot, 'EVENT-20');
 assert(second.success && second.order?.filledQuantity === 50 && second.order.remainingQuantity === 50, '20-unit partial fill accumulates');
 const brokerChange = ledger.recordFill(order.id, fillFor(order, 'FILL-BROKER-CHANGE', 1, 101, 'BROKER-CHANGED'), second.portfolio!, snapshot, 'EVENT-BROKER-CHANGE');
