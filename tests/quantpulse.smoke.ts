@@ -221,9 +221,10 @@ assert(!maxNotionalVerdict.isApproved && maxNotionalVerdict.checks.some(c => c.c
 const maxNotionalPaperResult = executePaperOrder(maxNotionalOrder, INITIAL_PORTFOLIO_STATE, snapshot);
 assert(maxNotionalPaperResult.status === 'REJECTED' && maxNotionalPaperResult.rejectionReason?.includes('deterministic risk engine'), 'paper execution boundary independently enforces the deterministic risk gate');
 
-const belowNotionalOrder = { ...baseOrder, quantity: (DEFAULT_RISK_CONFIG.maxPositionSizeNotional - 1) / snapshot.ask };
-const atNotionalOrder = { ...baseOrder, quantity: DEFAULT_RISK_CONFIG.maxPositionSizeNotional / snapshot.ask };
-const aboveNotionalOrder = { ...baseOrder, quantity: (DEFAULT_RISK_CONFIG.maxPositionSizeNotional + 1) / snapshot.ask };
+// These three assertions isolate the notional threshold from modeled slippage.
+const belowNotionalOrder = { ...baseOrder, quantity: (DEFAULT_RISK_CONFIG.maxPositionSizeNotional - 1) / snapshot.ask, estimatedSlippageBps: 0 };
+const atNotionalOrder = { ...baseOrder, quantity: DEFAULT_RISK_CONFIG.maxPositionSizeNotional / snapshot.ask, estimatedSlippageBps: 0 };
+const aboveNotionalOrder = { ...baseOrder, quantity: (DEFAULT_RISK_CONFIG.maxPositionSizeNotional + 1) / snapshot.ask, estimatedSlippageBps: 0 };
 assert(evaluateRiskGates(belowNotionalOrder, INITIAL_PORTFOLIO_STATE, riskSafeSnapshot).checks.find(c => c.checkName === 'MAX_POSITION_NOTIONAL')?.passed === true, 'max-notional boundary accepts one unit below');
 assert(evaluateRiskGates(atNotionalOrder, INITIAL_PORTFOLIO_STATE, riskSafeSnapshot).checks.find(c => c.checkName === 'MAX_POSITION_NOTIONAL')?.passed === true, 'max-notional boundary accepts exactly at limit');
 assert(evaluateRiskGates(aboveNotionalOrder, INITIAL_PORTFOLIO_STATE, riskSafeSnapshot).checks.find(c => c.checkName === 'MAX_POSITION_NOTIONAL')?.passed === false, 'max-notional boundary rejects one unit above');
