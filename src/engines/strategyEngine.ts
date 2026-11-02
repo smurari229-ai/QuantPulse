@@ -31,6 +31,41 @@ export const REGISTERED_STRATEGIES: StrategyDefinition[] = [
 
 export function evaluateStrategySignal(strategy: StrategyDefinition, symbol: string, bars: OHLCV[]): StrategySignalOutput {
   if (bars.length === 0) throw new Error('Strategy evaluation requires at least one OHLCV bar.');
+  const hasInvalidMarketBar = bars.some((bar) =>
+    !Number.isFinite(bar.timestamp) ||
+    !Number.isFinite(bar.open) ||
+    !Number.isFinite(bar.high) ||
+    !Number.isFinite(bar.low) ||
+    !Number.isFinite(bar.close) ||
+    !Number.isFinite(bar.volume) ||
+    bar.timestamp <= 0 ||
+    bar.open <= 0 ||
+    bar.high <= 0 ||
+    bar.low <= 0 ||
+    bar.close <= 0 ||
+    bar.volume < 0 ||
+    bar.high < bar.low ||
+    bar.open < bar.low ||
+    bar.open > bar.high ||
+    bar.close < bar.low ||
+    bar.close > bar.high
+  );
+  if (hasInvalidMarketBar) {
+    const lastBar = bars[bars.length - 1];
+    return {
+      strategyId: strategy.id,
+      symbol,
+      timestamp: Number.isFinite(lastBar.timestamp) ? lastBar.timestamp : Date.now(),
+      signal: 'NO_TRADE',
+      suggestedEntry: Number.isFinite(lastBar.close) && lastBar.close > 0 ? lastBar.close : 0,
+      suggestedStopLoss: 0,
+      suggestedTakeProfit: 0,
+      riskRewardRatio: 0,
+      targetQuantity: 0,
+      indicatorsSnapshot: analyzeMarketFeatures([]),
+      rationale: 'Invalid market-data bar detected; strategy evaluation halted safely.',
+    };
+  }
   if (!REGISTERED_STRATEGIES.some((registered) => registered.id === strategy.id)) {
     const lastBar = bars[bars.length - 1];
     return {

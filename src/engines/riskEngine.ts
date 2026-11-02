@@ -2,6 +2,7 @@ import {
   RiskEngineConfig,
   RiskValidationVerdict,
   IndividualRiskCheckResult,
+  RiskCheckName,
 } from '../types/risk';
 import { OrderRequest, PortfolioState } from '../types/order';
 import { MarketDataSnapshot } from '../types/market';
@@ -123,7 +124,14 @@ export function evaluateRiskGates(
       && Number.isFinite(position.quantity) && position.quantity >= 0
       && Number.isFinite(position.marketValue) && position.marketValue >= 0
     );
-  const orderNotional = order.quantity * referencePrice;
+  // Match risk sizing to the modeled executable price, including slippage.
+  // BUY fills are modeled above the quote; SELL fills are modeled below it.
+  const estimatedSlippageBps = order.estimatedSlippageBps ?? 5;
+  const marketExecutionFactor = 1 + estimatedSlippageBps / 10000;
+  const riskReferencePrice = order.type === 'MARKET'
+    ? (order.side === 'BUY' ? referencePrice * marketExecutionFactor : referencePrice / marketExecutionFactor)
+    : referencePrice;
+  const orderNotional = order.quantity * riskReferencePrice;
   const existingPosition = portfolio.positions.find((position) => position.symbol === order.symbol);
   const existingPositionNotional = existingPosition?.marketValue ?? 0;
   const projectedPositionNotional = order.side === 'SELL'
@@ -134,6 +142,11 @@ export function evaluateRiskGates(
   const exposureDelta = order.side === 'SELL' ? -Math.min(orderNotional, existingPositionNotional) : orderNotional;
   const projectedInvested = Math.max(0, currentInvested + exposureDelta);
   const projectedExposurePct = portfolio.equity > 0 ? (projectedInvested / portfolio.equity) * 100 : 100;
+
+  const existingPositionQuantity = existingPosition?.quantity ?? 0;
+  const passedSellAvailability = order.side !== 'SELL' || (existingPosition !== undefined && existingPositionQuantity >= order.quantity);
+  checks.push({ checkName: 'SELL_POSITION_AVAILABILITY' as RiskCheckName, passed: passedSellAvailability, severity: 'CRITICAL_REJECT', currentValue: order.side === 'SELL' ? existingPositionQuantity : 'N/A', thresholdLimit: order.side === 'SELL' ? `>= ${order.quantity}` : 'N/A', reason: passedSellAvailability ? 'Sell quantity is fully covered by the existing paper position.' : `Sell order requests ${order.quantity} units but only ${existingPositionQuantity} units are held.` });
+  if (!passedSellAvailability) rejectionReasons.push('Sell quantity exceeds the currently held position.');
 
   const validQuantity = Number.isFinite(order.quantity) && order.quantity > 0;
   const validReferencePrice = Number.isFinite(referencePrice) && referencePrice > 0;

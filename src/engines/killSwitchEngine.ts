@@ -82,7 +82,17 @@ export function resetKillSwitchWithVerification(
   currentState: KillSwitchState,
   enteredCode: string
 ): { success: boolean; updatedState: KillSwitchState; error?: string } {
-  if (!currentState.requiresManualReset) {
+  const hasActiveOperationalLock = currentState.isGlobalTradingOff
+    || currentState.isEmergencyStopTripped
+    || currentState.isDailyLossLockTripped
+    || currentState.isApiFailureLockTripped
+    || currentState.isDataStaleLockTripped
+    || currentState.isAbnormalFrequencyLockTripped;
+
+  // Any active operational lock requires the out-of-band authorization code.
+  // Do not trust requiresManualReset alone because a malformed/stale state could
+  // otherwise clear a safety lock without authorization.
+  if (!currentState.requiresManualReset && !hasActiveOperationalLock) {
     return {
       success: true,
       updatedState: {
@@ -98,7 +108,12 @@ export function resetKillSwitchWithVerification(
     };
   }
 
-  if (enteredCode.trim().toUpperCase() !== currentState.resetConfirmationCode) {
+  const hasValidResetAuthorization = typeof enteredCode === 'string'
+    && enteredCode.trim().length > 0
+    && typeof currentState.resetConfirmationCode === 'string'
+    && currentState.resetConfirmationCode.trim().length > 0;
+
+  if (!hasValidResetAuthorization || enteredCode.trim().toUpperCase() !== currentState.resetConfirmationCode) {
     return { success: false, updatedState: currentState, error: 'Invalid authorization code. Kill switch remains engaged.' };
   }
 

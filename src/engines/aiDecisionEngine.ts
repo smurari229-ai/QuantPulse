@@ -21,7 +21,7 @@ export function generateAIDecision(features: AIFeatureInput): AIDecisionOutput {
   ];
   const hasInvalidInput = numericInputs.some((value) => !Number.isFinite(value));
 
-  if (hasInvalidInput || currentPrice <= 0 || indicators.atr14 < 0 || indicators.relativeVolume < 0) {
+  if (hasInvalidInput || currentPrice <= 0 || indicators.atr14 < 0 || indicators.relativeVolume < 0 || indicators.rsi14 < 0 || indicators.rsi14 > 100 || currentMarketConditions.spreadBps < 0 || currentMarketConditions.dataStalenessMs < 0) {
     return {
       signal: 'NO_TRADE',
       confidence: 0,
@@ -44,8 +44,14 @@ export function generateAIDecision(features: AIFeatureInput): AIDecisionOutput {
   }
 
   if (currentMarketConditions.dataStalenessMs > 3000) {
-    risk_flags.push('DATA_STALENESS_EXCEEDS_MAX_TOLERANCE');
-    required_checks.push('Verify feed latency with broker gateway');
+    return {
+      signal: 'NO_TRADE', confidence: 0, confidenceCalibrationNote: AI_CONFIDENCE_DISCLOSURE,
+      reasoning: 'Market data is stale beyond the deterministic safety threshold. No trading decision is permitted until fresh validated data is available.',
+      strategy: 'STALE_DATA_HALT', risk_flags: ['DATA_STALENESS_EXCEEDS_MAX_TOLERANCE'],
+      required_checks: ['Refresh and validate market data before any order is considered'],
+      generatedAt: Date.now(), modelIdentifier: 'HEURISTIC-QUANT-DECISION-V2.5',
+      featuresUsed: { price: currentPrice, regime: indicators.marketRegime, rsi: indicators.rsi14, trend: 'UNKNOWN', volatilityAtr: indicators.atr14, volumeCondition: 'UNKNOWN' },
+    };
   }
 
   if (currentMarketConditions.spreadBps > 15) {

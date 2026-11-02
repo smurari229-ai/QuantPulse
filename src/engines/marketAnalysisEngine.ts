@@ -3,6 +3,8 @@ import { TechnicalIndicators } from '../types/strategy';
 
 // Exponential Moving Average
 export function calculateEMA(values: number[], period: number): number[] {
+  if (!Number.isInteger(period) || period <= 0) throw new Error('EMA period must be a positive integer.');
+  if (!values.every(Number.isFinite)) throw new Error('EMA input values must be finite numbers.');
   if (values.length === 0) return [];
   const k = 2 / (period + 1);
   const emaValues: number[] = [values[0]];
@@ -16,6 +18,8 @@ export function calculateEMA(values: number[], period: number): number[] {
 
 // Relative Strength Index (14)
 export function calculateRSI(closes: number[], period = 14): number[] {
+  if (!Number.isInteger(period) || period <= 0) throw new Error('RSI period must be a positive integer.');
+  if (!closes.every(Number.isFinite)) throw new Error('RSI input values must be finite numbers.');
   if (closes.length <= period) return new Array(closes.length).fill(50);
   const rsi: number[] = [];
   let gains = 0;

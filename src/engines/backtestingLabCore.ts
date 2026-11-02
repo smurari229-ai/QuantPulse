@@ -7,6 +7,7 @@ import {
   WalkForwardPeriodResult,
 } from '../types/backtest';
 import { calculateEMA, calculateRSI, calculateATR } from './marketAnalysisEngine';
+import { validateMarketDataSeries } from './marketDataEngine';
 
 export function runFullBacktest(
   bars: OHLCV[],
@@ -14,6 +15,10 @@ export function runFullBacktest(
 ): BacktestRunResult {
   if (bars.length === 0) {
     throw new Error('Backtest requires at least one OHLCV bar.');
+  }
+  const marketValidation = validateMarketDataSeries(bars);
+  if (!marketValidation.isValid) {
+    throw new Error(`Backtest market data validation failed: ${marketValidation.errors.join(' | ')}`);
   }
   if (params.initialCapital <= 0) {
     throw new Error('Backtest initial capital must be greater than zero.');
