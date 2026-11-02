@@ -162,6 +162,13 @@ const baseOrder: OrderRequest = {
   executionMode: 'PAPER', timestamp: Date.now(),
 };
 
+const slippageBoundarySnapshot = { ...riskSafeSnapshot, lastPrice: 1000, bid: 999.8, ask: 1000, timestamp: Date.now(), dataQuality: { ...riskSafeSnapshot.dataQuality, isStale: false, isValidated: true, latencyMs: 0 } };
+const slippageBoundaryOrder: OrderRequest = { ...baseOrder, id: 'SMOKE-SLIPPAGE-BOUNDARY', orderId: 'SMOKE-SLIPPAGE-BOUNDARY', clientOrderId: 'SMOKE-SLIPPAGE-BOUNDARY', quantity: 1, estimatedPrice: 1000, estimatedSlippageBps: 5, stopLossPrice: 960, takeProfitPrice: 1080 };
+const slippageBoundaryVerdict = evaluateRiskGates(slippageBoundaryOrder, INITIAL_PORTFOLIO_STATE, slippageBoundarySnapshot, undefined, { ...DEFAULT_RISK_CONFIG, maxPositionSizeNotional: 1000 });
+assert(!slippageBoundaryVerdict.isApproved && slippageBoundaryVerdict.checks.some(check => check.checkName === 'MAX_POSITION_NOTIONAL' && !check.passed), 'risk sizing includes modeled market slippage before approving a position ceiling');
+const noSlippageBoundaryVerdict = evaluateRiskGates({ ...slippageBoundaryOrder, estimatedSlippageBps: 0 }, INITIAL_PORTFOLIO_STATE, slippageBoundarySnapshot, undefined, { ...DEFAULT_RISK_CONFIG, maxPositionSizeNotional: 1000 });
+assert(noSlippageBoundaryVerdict.isApproved, 'the same order at the exact notional ceiling is approved when modeled slippage is zero');
+
 const futureSnapshot = { ...riskSafeSnapshot, timestamp: Date.now() + 60_000, dataQuality: { ...riskSafeSnapshot.dataQuality, isStale: false } };
 const futureSnapshotVerdict = evaluateRiskGates(baseOrder, INITIAL_PORTFOLIO_STATE, futureSnapshot);
 assert(!futureSnapshotVerdict.isApproved && futureSnapshotVerdict.rejectionReasons.some(reason => reason.toLowerCase().includes('stale')), 'future-dated market snapshot is rejected fail-closed');
