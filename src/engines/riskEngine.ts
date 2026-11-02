@@ -124,7 +124,14 @@ export function evaluateRiskGates(
       && Number.isFinite(position.quantity) && position.quantity >= 0
       && Number.isFinite(position.marketValue) && position.marketValue >= 0
     );
-  const orderNotional = order.quantity * referencePrice;
+  // Match risk sizing to the modeled executable price, including slippage.
+  // BUY fills are modeled above the quote; SELL fills are modeled below it.
+  const estimatedSlippageBps = order.estimatedSlippageBps ?? 5;
+  const marketExecutionFactor = 1 + estimatedSlippageBps / 10000;
+  const riskReferencePrice = order.type === 'MARKET'
+    ? (order.side === 'BUY' ? referencePrice * marketExecutionFactor : referencePrice / marketExecutionFactor)
+    : referencePrice;
+  const orderNotional = order.quantity * riskReferencePrice;
   const existingPosition = portfolio.positions.find((position) => position.symbol === order.symbol);
   const existingPositionNotional = existingPosition?.marketValue ?? 0;
   const projectedPositionNotional = order.side === 'SELL'
